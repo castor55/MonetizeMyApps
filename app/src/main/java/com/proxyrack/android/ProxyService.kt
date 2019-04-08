@@ -6,17 +6,17 @@ import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
 import com.google.gson.Gson
-import com.proxyrack.network.createRetrofitClient
-import com.proxyrack.network.getDeviceId
-import com.proxyrack.network.model.Geolocation
-import com.proxyrack.network.model.MessageToServer
+import com.proxyrack.network.*
+import com.proxyrack.network.model.*
 import com.proxyrack.network.service.GeolocationService
 import io.reactivex.Flowable
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
-import java.io.*
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
@@ -24,8 +24,8 @@ import javax.net.ssl.SSLSocketFactory
 class ProxyService : Service() {
 
     private var socket: SSLSocket? = null
-    private var readerStream: InputStream? = null
-    private var writerStream: OutputStream? = null
+    private var readerStream: DataInputStream? = null
+    private var writerStream: DataOutputStream? = null
     private val disposables = CompositeDisposable()
 
     override fun onBind(intent: Intent): IBinder? {
@@ -37,14 +37,16 @@ class ProxyService : Service() {
         disposables.add(
             getLocation()
                 .map {
-                    val message = MessageToServer("hello", getDeviceId(), it.city, it.country)
+                    val message = HelloMessage(
+                        body = HelloMessageBody(
+                            getDeviceId(), it.city, it.countryCode, getSystemInfo()
+                        )
+                    )
                     connectToServer(message)
                 }
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe({
-                    Log.d(ProxyService::class.java.simpleName, "Finished")
-                }, { t ->
+                .subscribe({}, { t ->
                     Toast.makeText(baseContext, t.localizedMessage, Toast.LENGTH_LONG).show()
                 })
         )
@@ -53,37 +55,36 @@ class ProxyService : Service() {
     /**
      * Connects to backconnect server via SSL
      */
-    private fun connectToServer(message: MessageToServer) {
+    private fun connectToServer(helloMessage: HelloMessage) {
 
         val host = "monetizemyapp.net"
-        val port = 8080 // default secure port
+        val port = 443
 
         // Create and open a connection
         socket = createSocket(host, port)
+        writerStream = DataOutputStream(socket!!.outputStream)
+        readerStream = DataInputStream(socket!!.inputStream)
 
-        // Prepare json body, indicating end of string with a special char
-        val json = Gson().toJson(message) + "\\0"
-
-        writerStream = BufferedOutputStream(socket!!.outputStream)
-        readerStream = BufferedInputStream(socket!!.inputStream)
-
-        // Send hello message to server
-        writerStream!!.write(json.toByteArray())
-        writerStream!!.flush()
+        sendToServer(helloMessage)
 
         // Server won't respond to hello message,
         // but we need to start listening for user-initiated connection requests
         disposables.add(
-            Flowable.interval(1, TimeUnit.SECONDS)
+            Flowable.interval(10, TimeUnit.SECONDS)
                 .map {
-                    // Check for response from server
-                    val data = ByteArray(2048)
-                    val len = readerStream!!.read(data)
-                    if (len > 0) {
-                        val response = String(data, 0, len)
-                        Log.d(ProxyService::class.java.simpleName, response)
-                    } else {
-                        Log.d(ProxyService::class.java.simpleName, "No data received")
+                    val response = readerStream!!.getResponse()
+                    when {
+                        response.contains("backconnect") -> {
+                            val helloResponse = Gson().fromJson<HelloResponse>(response, HelloResponse::class.java)
+                            val token = helloResponse.body.token
+
+                            sendToServer(ConnectMessage(body = ConnectMessageBody(token)))
+                        }
+                        response.contains("ping") -> {
+                            sendToServer(PongMessage())
+                            // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
+                        }
+                        else -> Log.d(ProxyService::class.java.simpleName, response)
                     }
                 }
                 .subscribeOn(Schedulers.io())
@@ -102,7 +103,19 @@ class ProxyService : Service() {
     }
 
     /**
-     * Retrieves user location, used for registration on backconnect server later
+     * Sends specified message object to server in JSON format
+     */
+    private fun sendToServer(message: Any) {
+        // Prepare message body, indicating end of string with a special char
+        val body = Gson().toJson(message) + endOfString()
+
+        // Send message to server immediately
+        writerStream!!.write(body.toByteArray())
+        writerStream!!.flush()
+    }
+
+    /**
+     * Retrieves user location, which is used for registration on backconnect server
      */
     private fun getLocation(): Single<Geolocation> {
         val geoClient = createRetrofitClient("http://ip-api.com/")

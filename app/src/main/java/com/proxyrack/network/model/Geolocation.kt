@@ -2,5 +2,5 @@ package com.proxyrack.network.model
 
 data class Geolocation(
     val city: String,
-    val country: String
+    val countryCode: String
 )
