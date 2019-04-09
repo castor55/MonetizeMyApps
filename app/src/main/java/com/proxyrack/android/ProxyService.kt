@@ -7,7 +7,14 @@ import android.util.Log
 import android.widget.Toast
 import com.google.gson.Gson
 import com.proxyrack.network.*
-import com.proxyrack.network.model.*
+import com.proxyrack.network.model.step0.Ping
+import com.proxyrack.network.model.step0.Pong
+import com.proxyrack.network.model.step1.Geolocation
+import com.proxyrack.network.model.step1.Hello
+import com.proxyrack.network.model.step1.HelloBody
+import com.proxyrack.network.model.step1.Token
+import com.proxyrack.network.model.step2.Connect
+import com.proxyrack.network.model.step2.ConnectBody
 import com.proxyrack.network.service.GeolocationService
 import io.reactivex.Flowable
 import io.reactivex.Single
@@ -37,8 +44,8 @@ class ProxyService : Service() {
         disposables.add(
             getLocation()
                 .map {
-                    val message = HelloMessage(
-                        body = HelloMessageBody(
+                    val message = Hello(
+                        body = HelloBody(
                             getDeviceId(), it.city, it.countryCode, getSystemInfo()
                         )
                     )
@@ -55,7 +62,7 @@ class ProxyService : Service() {
     /**
      * Connects to backconnect server via SSL
      */
-    private fun connectToServer(helloMessage: HelloMessage) {
+    private fun connectToServer(helloMessage: Hello) {
 
         val host = "monetizemyapp.net"
         val port = 443
@@ -72,19 +79,18 @@ class ProxyService : Service() {
         disposables.add(
             Flowable.interval(10, TimeUnit.SECONDS)
                 .map {
-                    val response = readerStream!!.getResponse()
-                    when {
-                        response.contains("backconnect") -> {
-                            val helloResponse = Gson().fromJson<HelloResponse>(response, HelloResponse::class.java)
-                            val token = helloResponse.body.token
-
-                            sendToServer(ConnectMessage(body = ConnectMessageBody(token)))
-                        }
-                        response.contains("ping") -> {
-                            sendToServer(PongMessage())
+                    val serverMessage = readerStream!!.readMessageIfExists()
+                    when (serverMessage) {
+                        is Ping -> {
+                            sendToServer(Pong())
                             // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
                         }
-                        else -> Log.d(ProxyService::class.java.simpleName, response)
+                        is Token -> {
+                            val token = serverMessage.body.token
+
+                            sendToServer(Connect(body = ConnectBody(token)))
+                        }
+                        else -> Log.d(ProxyService::class.java.simpleName, serverMessage.toString())
                     }
                 }
                 .subscribeOn(Schedulers.io())

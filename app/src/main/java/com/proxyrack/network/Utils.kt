@@ -4,7 +4,12 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.provider.Settings.Secure
-import com.proxyrack.network.model.SystemInfo
+import com.google.gson.Gson
+import com.proxyrack.network.model.base.ServerMessage
+import com.proxyrack.network.model.base.ServerMessageType
+import com.proxyrack.network.model.step0.Ping
+import com.proxyrack.network.model.step1.SystemInfo
+import com.proxyrack.network.model.step1.Token
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
@@ -73,7 +78,16 @@ fun disableHttpsSecurity() {
     }
 }
 
-fun InputStream.getResponse(): String {
+fun InputStream.readMessageIfExists(): ServerMessage {
+    val string = readString()
+    return when {
+        string.contains(ServerMessageType.PING) -> string.toObject<Ping>()
+        string.contains(ServerMessageType.TOKEN) -> string.toObject<Token>()
+        else -> string.toObject()
+    }
+}
+
+fun InputStream.readString(): String {
     // Check for response from server/
     val data = ByteArray(2048)
     val length = read(data)
@@ -85,4 +99,8 @@ fun InputStream.getResponse(): String {
         // No data received
         ""
     }
+}
+
+inline fun <reified T> String.toObject(): T {
+    return Gson().fromJson<T>(this, T::class.java)
 }

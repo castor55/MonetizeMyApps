@@ -1,14 +1,15 @@
-package com.proxyrack.network.model
+package com.proxyrack.network.model.step1
 
 import com.google.gson.annotations.SerializedName
+import com.proxyrack.network.model.base.ClientMessageType
 
-data class HelloMessage(
-    val type: String = "hello",
+data class Hello(
+    val type: String = ClientMessageType.HELLO,
     @SerializedName("msg")
-    val body: HelloMessageBody
+    val body: HelloBody
 )
 
-data class HelloMessageBody(
+data class HelloBody(
     @SerializedName("id")
     val deviceId: String,
     val city: String,

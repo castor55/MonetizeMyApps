@@ -1,4 +1,4 @@
-package com.proxyrack.network.model
+package com.proxyrack.network.model.step1
 
 data class Geolocation(
     val city: String,
