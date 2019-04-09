@@ -3,31 +3,32 @@ package com.proxyrack.android
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
-import android.util.Log
 import android.widget.Toast
 import com.google.gson.Gson
 import com.proxyrack.network.*
-import com.proxyrack.network.model.step0.Ping
+import com.proxyrack.network.model.base.ClientMessage
+import com.proxyrack.network.model.base.ServerMessage
+import com.proxyrack.network.model.base.ServerMessageEmpty
+import com.proxyrack.network.model.base.ServerMessageType
 import com.proxyrack.network.model.step0.Pong
 import com.proxyrack.network.model.step1.Geolocation
 import com.proxyrack.network.model.step1.Hello
 import com.proxyrack.network.model.step1.HelloBody
-import com.proxyrack.network.model.step1.Token
+import com.proxyrack.network.model.step2.Backconnect
 import com.proxyrack.network.model.step2.Connect
 import com.proxyrack.network.model.step2.ConnectBody
 import com.proxyrack.network.service.GeolocationService
-import io.reactivex.Flowable
 import io.reactivex.Single
-import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.schedulers.Schedulers
+import io.reactivex.schedulers.Schedulers.io
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
+// TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
 class ProxyService : Service() {
 
     private var socket: SSLSocket? = null
@@ -44,17 +45,23 @@ class ProxyService : Service() {
         disposables.add(
             getLocation()
                 .map {
-                    val message = Hello(
-                        body = HelloBody(
-                            getDeviceId(), it.city, it.countryCode, getSystemInfo()
-                        )
-                    )
-                    connectToServer(message)
+                    val message = Hello(HelloBody(getDeviceId(), it.city, it.countryCode, getSystemInfo()))
+                    sendToServer(message)
+                    waitForResponse() as Backconnect
                 }
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
+                .map {
+                    val message = Connect(ConnectBody(it.body.token))
+                    sendToServer(message)
+                    waitForResponse()
+                }
+                .map {
+                    // TODO: Start socks5 proxy and funnel traffic to server
+                }
+                .subscribeOn(io())
+                .observeOn(mainThread())
                 .subscribe({}, { t ->
                     Toast.makeText(baseContext, t.localizedMessage, Toast.LENGTH_LONG).show()
+                    t.printStackTrace()
                 })
         )
     }
@@ -62,41 +69,26 @@ class ProxyService : Service() {
     /**
      * Connects to backconnect server via SSL
      */
-    private fun connectToServer(helloMessage: Hello) {
+    private fun sendToServer(message: ClientMessage) {
 
         val host = "monetizemyapp.net"
         val port = 443
 
-        // Create and open a connection
+        // (every exchange happens in a fresh socket)
+        val isConnectionActive = socket != null && socket!!.isConnected
+        if (isConnectionActive) closeConnection()
+
+        // Start a connection
         socket = createSocket(host, port)
         writerStream = DataOutputStream(socket!!.outputStream)
         readerStream = DataInputStream(socket!!.inputStream)
 
-        sendToServer(helloMessage)
+        // Prepare message body, indicating end of string with a special char
+        val body = Gson().toJson(message) + endOfString()
 
-        // Server won't respond to hello message,
-        // but we need to start listening for user-initiated connection requests
-        disposables.add(
-            Flowable.interval(10, TimeUnit.SECONDS)
-                .map {
-                    val serverMessage = readerStream!!.readMessageIfExists()
-                    when (serverMessage) {
-                        is Ping -> {
-                            sendToServer(Pong())
-                            // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
-                        }
-                        is Token -> {
-                            val token = serverMessage.body.token
-
-                            sendToServer(Connect(body = ConnectBody(token)))
-                        }
-                        else -> Log.d(ProxyService::class.java.simpleName, serverMessage.toString())
-                    }
-                }
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe({ }, { e -> throw e })
-        )
+        // Send message to server immediately
+        writerStream!!.write(body.toByteArray())
+        writerStream!!.flush()
     }
 
     @Throws(IOException::class)
@@ -108,16 +100,20 @@ class ProxyService : Service() {
         return socket
     }
 
-    /**
-     * Sends specified message object to server in JSON format
-     */
-    private fun sendToServer(message: Any) {
-        // Prepare message body, indicating end of string with a special char
-        val body = Gson().toJson(message) + endOfString()
+    private fun waitForResponse(): ServerMessage {
+        val response = readerStream!!.getString()
 
-        // Send message to server immediately
-        writerStream!!.write(body.toByteArray())
-        writerStream!!.flush()
+        if (response.contains(ServerMessageType.PING)) {
+            if (socket!!.isConnected) {
+                sendToServer(Pong())
+            }
+            return waitForResponse()
+        }
+        // Convert server response to corresponding object type
+        return when {
+            response.contains(ServerMessageType.BACKCONNECT) -> response.toObject<Backconnect>()
+            else -> ServerMessageEmpty()
+        }
     }
 
     /**
@@ -130,13 +126,13 @@ class ProxyService : Service() {
     }
 
     override fun onDestroy() {
-        // Cleanup
+        closeConnection()
+        disposables.clear()
+    }
+
+    private fun closeConnection() {
         readerStream?.close()
         writerStream?.close()
-
-        if (socket != null) {
-            socket!!.close()
-        }
-        disposables.clear()
+        socket?.close()
     }
 }

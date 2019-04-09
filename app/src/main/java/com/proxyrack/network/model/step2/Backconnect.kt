@@ -1,15 +1,15 @@
-package com.proxyrack.network.model.step1
+package com.proxyrack.network.model.step2
 
 import com.google.gson.annotations.SerializedName
 import com.proxyrack.network.model.base.ServerMessage
 import com.proxyrack.network.model.base.ServerMessageType
 
-data class Token(
-    val type: String = ServerMessageType.TOKEN,
+data class Backconnect(
+    val type: String = ServerMessageType.BACKCONNECT,
     @SerializedName("msg")
-    val body: TokenBody
+    val body: BackconnectBody
 ) : ServerMessage()
 
-data class TokenBody(
+data class BackconnectBody(
     val token: String
 )

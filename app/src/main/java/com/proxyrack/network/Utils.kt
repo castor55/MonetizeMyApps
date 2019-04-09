@@ -5,21 +5,11 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings.Secure
 import com.google.gson.Gson
-import com.proxyrack.network.model.base.ServerMessage
-import com.proxyrack.network.model.base.ServerMessageType
-import com.proxyrack.network.model.step0.Ping
 import com.proxyrack.network.model.step1.SystemInfo
-import com.proxyrack.network.model.step1.Token
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.InputStream
-import java.security.GeneralSecurityException
-import java.security.cert.X509Certificate
-import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
 @SuppressLint("HardwareIds")
 fun Context.getDeviceId(): String {
@@ -45,60 +35,21 @@ fun createRetrofitClient(url: String): Retrofit {
         .build()
 }
 
-fun endOfString(): String {
-    return String(Character.toChars(Integer.parseInt("0000", 16)))
-}
+/**
+ * Checking for response from server
+ */
+fun InputStream.getString(): String {
 
-@SuppressLint("TrustAllX509TrustManager")
-fun disableHttpsSecurity() {
-    // Create a trust manager that does not validate certificate chains
-    val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
-
-        override fun getAcceptedIssuers(): Array<X509Certificate> {
-            return arrayOf() //To change body of created functions use File | Settings | File Templates.
-        }
-
-        override fun checkClientTrusted(
-            certs: Array<java.security.cert.X509Certificate>, authType: String
-        ) {
-        }
-
-        override fun checkServerTrusted(
-            certs: Array<java.security.cert.X509Certificate>, authType: String
-        ) {
-        }
-    })
-
-    // Install the all-trusting trust manager
-    try {
-        val sc = SSLContext.getInstance("SSL")
-        sc.init(null, trustAllCerts, java.security.SecureRandom())
-        HttpsURLConnection.setDefaultSSLSocketFactory(sc.socketFactory)
-    } catch (e: GeneralSecurityException) {
-    }
-}
-
-fun InputStream.readMessageIfExists(): ServerMessage {
-    val string = readString()
-    return when {
-        string.contains(ServerMessageType.PING) -> string.toObject<Ping>()
-        string.contains(ServerMessageType.TOKEN) -> string.toObject<Token>()
-        else -> string.toObject()
-    }
-}
-
-fun InputStream.readString(): String {
-    // Check for response from server/
     val data = ByteArray(2048)
     val length = read(data)
-    return if (length > 0) {
-        String(data, 0, length)
-            // Trim "end of line" character to keep JSON string valid
-            .replace(endOfString(), "")
-    } else {
-        // No data received
-        ""
-    }
+
+    val result = String(data, 0, length)
+
+    return result.removeSuffix(endOfString())
+}
+
+fun endOfString(): String {
+    return String(Character.toChars(Integer.parseInt("0000", 16)))
 }
 
 inline fun <reified T> String.toObject(): T {

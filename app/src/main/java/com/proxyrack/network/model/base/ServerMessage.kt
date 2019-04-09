@@ -5,6 +5,8 @@ abstract class ServerMessage
 class ServerMessageType {
     companion object {
         val PING = "ping"
-        val TOKEN = "backconnect"
+        val BACKCONNECT = "backconnect"
     }
 }
+
+class ServerMessageEmpty : ServerMessage()
