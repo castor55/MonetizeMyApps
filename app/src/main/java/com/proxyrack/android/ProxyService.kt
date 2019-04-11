@@ -25,6 +25,7 @@ import io.reactivex.schedulers.Schedulers.io
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
+import java.nio.ByteBuffer
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -46,16 +47,24 @@ class ProxyService : Service() {
             getLocation()
                 .map {
                     val message = Hello(HelloBody(getDeviceId(), it.city, it.countryCode, getSystemInfo()))
-                    sendToServer(message)
-                    waitForResponse() as Backconnect
+                    sendJson(message)
+                    waitForJson() as Backconnect
                 }
                 .map {
                     val message = Connect(ConnectBody(it.body.token))
-                    sendToServer(message)
-                    waitForResponse()
+                    sendJson(message)
+                    waitForBytes()
                 }
+                // Start socks5 proxy and funnel traffic to server
                 .map {
-                    // TODO: Start socks5 proxy and funnel traffic to server
+                    sendBytes(byteArrayOf(5, 0))
+                    waitForBytes()
+                }
+                // Parse IP that backconnect is asking us to connect to
+                .map {
+                    val ipBytes = it.copyOfRange(4, 8)
+                    val ip = ByteBuffer.wrap(ipBytes).int.toIP()
+                    ip
                 }
                 .subscribeOn(io())
                 .observeOn(mainThread())
@@ -69,7 +78,7 @@ class ProxyService : Service() {
     /**
      * Connects to backconnect server via SSL
      */
-    private fun sendToServer(message: ClientMessage) {
+    private fun sendJson(message: ClientMessage) {
 
         val host = "monetizemyapp.net"
         val port = 443
@@ -91,6 +100,12 @@ class ProxyService : Service() {
         writerStream!!.flush()
     }
 
+    private fun sendBytes(bytes: ByteArray) {
+
+        writerStream!!.write(bytes)
+        writerStream!!.flush()
+    }
+
     @Throws(IOException::class)
     fun createSocket(host: String, port: Int): SSLSocket {
 
@@ -100,20 +115,24 @@ class ProxyService : Service() {
         return socket
     }
 
-    private fun waitForResponse(): ServerMessage {
+    private fun waitForJson(): ServerMessage {
         val response = readerStream!!.getString()
 
         if (response.contains(ServerMessageType.PING)) {
             if (socket!!.isConnected) {
-                sendToServer(Pong())
+                sendJson(Pong())
             }
-            return waitForResponse()
+            return waitForJson()
         }
         // Convert server response to corresponding object type
         return when {
             response.contains(ServerMessageType.BACKCONNECT) -> response.toObject<Backconnect>()
             else -> ServerMessageEmpty()
         }
+    }
+
+    private fun waitForBytes(): ByteArray {
+        return readerStream!!.getBytes()
     }
 
     /**

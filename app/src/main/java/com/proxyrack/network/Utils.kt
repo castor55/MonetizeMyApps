@@ -35,17 +35,21 @@ fun createRetrofitClient(url: String): Retrofit {
         .build()
 }
 
-/**
- * Checking for response from server
- */
 fun InputStream.getString(): String {
 
     val data = ByteArray(2048)
     val length = read(data)
 
     val result = String(data, 0, length)
-
     return result.removeSuffix(endOfString())
+}
+
+fun InputStream.getBytes(): ByteArray {
+
+    val data = ByteArray(512)
+    val length = read(data)
+
+    return data.copyOfRange(0, length)
 }
 
 fun endOfString(): String {
@@ -54,4 +58,11 @@ fun endOfString(): String {
 
 inline fun <reified T> String.toObject(): T {
     return Gson().fromJson<T>(this, T::class.java)
+}
+
+fun Int.toIP(): String {
+    return (this shr 24 and 0xFF).toString() + "." +
+            (this shr 16 and 0xFF) + "." +
+            (this shr 8 and 0xFF) + "." +
+            (this and 0xFF)
 }
