@@ -22,10 +22,12 @@ import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers.io
-import java.io.DataInputStream
-import java.io.DataOutputStream
-import java.io.IOException
+import java.io.*
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.URL
 import java.nio.ByteBuffer
+import javax.net.SocketFactory
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -35,6 +37,10 @@ class ProxyService : Service() {
     private var socket: SSLSocket? = null
     private var readerStream: DataInputStream? = null
     private var writerStream: DataOutputStream? = null
+
+    private var socketExternal: Socket? = null
+    private var readerStreamExternal: InputStream? = null
+
     private val disposables = CompositeDisposable()
 
     override fun onBind(intent: Intent): IBinder? {
@@ -50,6 +56,7 @@ class ProxyService : Service() {
                     sendJson(message)
                     waitForJson() as Backconnect
                 }
+                // Verify client token
                 .map {
                     val message = Connect(ConnectBody(it.body.token))
                     sendJson(message)
@@ -64,7 +71,25 @@ class ProxyService : Service() {
                 .map {
                     val ipBytes = it.copyOfRange(4, 8)
                     val ip = ByteBuffer.wrap(ipBytes).int.toIP()
-                    ip
+
+                    val portByte = it[9]
+                    val port = portByte.toInt()
+
+                    InetSocketAddress(ip, port)
+                }
+                // Get bytes from external source
+                .map {
+                    connectExternal(it)
+                    waitForExternalBytes()
+                }
+                // Return bytes to client
+                .doOnSuccess {
+                    val requestType = it[1]
+                    sendBytes(byteArrayOf(5, 0, 0, 3) + ByteArray(6))
+                }
+                // Or return error to client
+                .doOnError {
+                    sendBytes(byteArrayOf(5, 4, 0, 3) + ByteArray(6))
                 }
                 .subscribeOn(io())
                 .observeOn(mainThread())
@@ -85,7 +110,7 @@ class ProxyService : Service() {
 
         // (every exchange happens in a fresh socket)
         val isConnectionActive = socket != null && socket!!.isConnected
-        if (isConnectionActive) closeConnection()
+        if (isConnectionActive) closeConnectionBackconnect()
 
         // Start a connection
         socket = createSocket(host, port)
@@ -98,6 +123,15 @@ class ProxyService : Service() {
         // Send message to server immediately
         writerStream!!.write(body.toByteArray())
         writerStream!!.flush()
+    }
+
+    /**
+     * Connects to external server via SSL.
+     * These bytes will be funneled to backconnect server
+     */
+    private fun connectExternal(address: InetSocketAddress) {
+
+        readerStreamExternal = URL("http://${address.hostName}").openStream()
     }
 
     private fun sendBytes(bytes: ByteArray) {
@@ -113,6 +147,13 @@ class ProxyService : Service() {
             .createSocket(host, port) as SSLSocket
         socket.enabledProtocols = arrayOf("TLSv1.2")
         return socket
+    }
+
+    @Throws(IOException::class)
+    fun createExternalSocket(host: String, port: Int): Socket {
+
+        return SocketFactory.getDefault()
+            .createSocket(host, port) as Socket
     }
 
     private fun waitForJson(): ServerMessage {
@@ -135,6 +176,18 @@ class ProxyService : Service() {
         return readerStream!!.getBytes()
     }
 
+    private fun waitForExternalBytes(): ByteArray {
+        val outputStream = ByteArrayOutputStream()
+        val data = ByteArray(4096)
+
+        var length = readerStreamExternal!!.read(data)
+        while (length > 0) {
+            outputStream.write(data, 0, length)
+            length = readerStreamExternal!!.read(data)
+        }
+        return outputStream.toByteArray()
+    }
+
     /**
      * Retrieves user location, which is used for registration on backconnect server
      */
@@ -145,13 +198,19 @@ class ProxyService : Service() {
     }
 
     override fun onDestroy() {
-        closeConnection()
+        closeConnectionBackconnect()
+        closeConnectionExternal()
         disposables.clear()
     }
 
-    private fun closeConnection() {
+    private fun closeConnectionBackconnect() {
         readerStream?.close()
         writerStream?.close()
         socket?.close()
+    }
+
+    private fun closeConnectionExternal() {
+        readerStreamExternal?.close()
+        socketExternal?.close()
     }
 }
