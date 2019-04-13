@@ -27,7 +27,6 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 import java.nio.ByteBuffer
-import javax.net.SocketFactory
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -48,6 +47,9 @@ class ProxyService : Service() {
     }
 
     override fun onCreate() {
+
+        var ip = ""
+        var port = -1
 
         disposables.add(
             getLocation()
@@ -70,10 +72,10 @@ class ProxyService : Service() {
                 // Parse IP that backconnect is asking us to connect to
                 .map {
                     val ipBytes = it.copyOfRange(4, 8)
-                    val ip = ByteBuffer.wrap(ipBytes).int.toIP()
+                    ip = ByteBuffer.wrap(ipBytes).int.toIP()
 
                     val portByte = it[9]
-                    val port = portByte.toInt()
+                    port = portByte.toInt()
 
                     InetSocketAddress(ip, port)
                 }
@@ -84,12 +86,16 @@ class ProxyService : Service() {
                 }
                 // Return bytes to client
                 .doOnSuccess {
-                    val requestType = it[1]
-                    sendBytes(byteArrayOf(5, 0, 0, 3) + ByteArray(6))
+                    val bytes = byteArrayOf(5, 0, 0, 3) + 0 + port.toByte() + ip.asIntArray()
+
+                    sendBytes(bytes)
+                    sendBytes(it)
                 }
                 // Or return error to client
                 .doOnError {
-                    sendBytes(byteArrayOf(5, 4, 0, 3) + ByteArray(6))
+                    val bytes = byteArrayOf(5, 4, 0, 3) + 0 + port.toByte() + ip.asIntArray()
+
+                    sendBytes(bytes)
                 }
                 .subscribeOn(io())
                 .observeOn(mainThread())
@@ -126,11 +132,16 @@ class ProxyService : Service() {
     }
 
     /**
-     * Connects to external server via SSL.
+     * Connects to external server.
      * These bytes will be funneled to backconnect server
      */
     private fun connectExternal(address: InetSocketAddress) {
 
+        // (every exchange happens in a fresh socket)
+        val isConnectionActive = socketExternal != null && socketExternal!!.isConnected
+        if (isConnectionActive) closeConnectionExternal()
+
+        // Start a connection
         readerStreamExternal = URL("http://${address.hostName}").openStream()
     }
 
@@ -147,13 +158,6 @@ class ProxyService : Service() {
             .createSocket(host, port) as SSLSocket
         socket.enabledProtocols = arrayOf("TLSv1.2")
         return socket
-    }
-
-    @Throws(IOException::class)
-    fun createExternalSocket(host: String, port: Int): Socket {
-
-        return SocketFactory.getDefault()
-            .createSocket(host, port) as Socket
     }
 
     private fun waitForJson(): ServerMessage {
@@ -213,4 +217,8 @@ class ProxyService : Service() {
         readerStreamExternal?.close()
         socketExternal?.close()
     }
+}
+
+private fun String.asIntArray(): List<Byte> {
+    return split(".").map { it.toInt().toByte() }
 }
