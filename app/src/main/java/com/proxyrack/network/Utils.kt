@@ -66,3 +66,7 @@ fun Int.toIP(): String {
             (this shr 8 and 0xFF) + "." +
             (this and 0xFF)
 }
+
+fun String.asIntArray(): List<Byte> {
+    return split(".").map { it.toInt().toByte() }
+}

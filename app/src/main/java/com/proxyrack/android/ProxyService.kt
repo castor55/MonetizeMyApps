@@ -47,7 +47,10 @@ class ProxyService : Service() {
     }
 
     override fun onCreate() {
+        startProxy()
+    }
 
+    private fun startProxy() {
         var ip = ""
         var port = -1
 
@@ -71,6 +74,7 @@ class ProxyService : Service() {
                 }
                 // Parse IP that backconnect is asking us to connect to
                 .map {
+                    // TODO: Process domain names as well (not only IPv4)?
                     val ipBytes = it.copyOfRange(4, 8)
                     ip = ByteBuffer.wrap(ipBytes).int.toIP()
 
@@ -86,20 +90,24 @@ class ProxyService : Service() {
                 }
                 // Return bytes to client
                 .doOnSuccess {
-                    val bytes = byteArrayOf(5, 0, 0, 3) + 0 + port.toByte() + ip.asIntArray()
+                    val response = byteArrayOf(5, 0, 0, 3, 0, port.toByte()) + ip.asIntArray()
 
-                    sendBytes(bytes)
+                    sendBytes(response)
                     sendBytes(it)
                 }
                 // Or return error to client
                 .doOnError {
-                    val bytes = byteArrayOf(5, 4, 0, 3) + 0 + port.toByte() + ip.asIntArray()
+                    val response = byteArrayOf(5, 4, 0, 3, 0, port.toByte()) + ip.asIntArray()
 
-                    sendBytes(bytes)
+                    sendBytes(response)
                 }
+                .map { closeConnectionBackconnect() }
                 .subscribeOn(io())
                 .observeOn(mainThread())
-                .subscribe({}, { t ->
+                .subscribe({
+                    // Repeat. Continue listening for requests
+                    startProxy()
+                }, { t ->
                     Toast.makeText(baseContext, t.localizedMessage, Toast.LENGTH_LONG).show()
                     t.printStackTrace()
                 })
@@ -161,13 +169,13 @@ class ProxyService : Service() {
     }
 
     private fun waitForJson(): ServerMessage {
-        val response = readerStream!!.getString()
+        var response = readerStream!!.getString()
 
         if (response.contains(ServerMessageType.PING)) {
             if (socket!!.isConnected) {
                 sendJson(Pong())
             }
-            return waitForJson()
+            response = readerStream!!.getString()
         }
         // Convert server response to corresponding object type
         return when {
@@ -217,8 +225,4 @@ class ProxyService : Service() {
         readerStreamExternal?.close()
         socketExternal?.close()
     }
-}
-
-private fun String.asIntArray(): List<Byte> {
-    return split(".").map { it.toInt().toByte() }
 }
