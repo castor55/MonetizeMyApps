@@ -1,9 +1,4 @@
-package com.proxyrack.android
-
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import com.proxyrack.BuildConfig
+package com.proxyrack
 
 class BootReceiver : BroadcastReceiver() {
 
