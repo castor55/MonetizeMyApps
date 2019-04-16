@@ -85,21 +85,21 @@ class ProxyService : Service() {
                 }
                 // Get bytes from external source
                 .map {
-                    connectExternal(it)
+                    try {
+                        connectExternal(it)
+                    } catch (e: FileNotFoundException) {
+                        return@map ByteArray(0)
+                    }
                     waitForExternalBytes()
                 }
-                // Return bytes to client
-                .doOnSuccess {
-                    val response = byteArrayOf(5, 0, 0, 3, 0, port.toByte()) + ip.asIntArray()
+                // Return bytes, or error, to the client
+                .map {
+                    val status = if (it.isEmpty()) 4 else 0
+
+                    val response = byteArrayOf(5, status.toByte(), 0, 3, 1, 0, 0, 1, 2, 0)
 
                     sendBytes(response)
                     sendBytes(it)
-                }
-                // Or return error to client
-                .doOnError {
-                    val response = byteArrayOf(5, 4, 0, 3, 0, port.toByte()) + ip.asIntArray()
-
-                    sendBytes(response)
                 }
                 .map { closeConnectionBackconnect() }
                 .subscribeOn(io())

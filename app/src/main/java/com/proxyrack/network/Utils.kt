@@ -1,22 +1,23 @@
 package com.proxyrack.network
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.os.Build
-import android.provider.Settings.Secure
 import com.google.gson.Gson
 import com.proxyrack.network.model.step1.SystemInfo
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.InputStream
+import java.util.*
+
+var uniqueId: String? = null
 
 @SuppressLint("HardwareIds")
-fun Context.getDeviceId(): String {
-    return Secure.getString(
-        contentResolver,
-        Secure.ANDROID_ID
-    )
+fun getDeviceId(): String {
+    if (uniqueId == null) {
+        uniqueId = UUID.randomUUID().toString()
+    }
+    return uniqueId!!
 }
 
 @SuppressLint("HardwareIds")
