@@ -51,8 +51,6 @@ class ProxyService : Service() {
     }
 
     private fun startProxy() {
-        var ip = ""
-        var port = -1
 
         disposables.add(
             getLocation()
@@ -76,10 +74,10 @@ class ProxyService : Service() {
                 .map {
                     // TODO: Process domain names as well (not only IPv4)?
                     val ipBytes = it.copyOfRange(4, 8)
-                    ip = ByteBuffer.wrap(ipBytes).int.toIP()
+                    val ip = ByteBuffer.wrap(ipBytes).int.toIP()
 
                     val portByte = it[9]
-                    port = portByte.toInt()
+                    val port = portByte.toInt()
 
                     InetSocketAddress(ip, port)
                 }
@@ -94,9 +92,9 @@ class ProxyService : Service() {
                 }
                 // Return bytes, or error, to the client
                 .map {
-                    val status = if (it.isEmpty()) 4 else 0
+                    val status = if (it.isEmpty()) 5 else 0
 
-                    val response = byteArrayOf(5, status.toByte(), 0, 3, 1, 0, 0, 1, 2, 0)
+                    val response = byteArrayOf(5, status.toByte(), 0)
 
                     sendBytes(response)
                     sendBytes(it)
