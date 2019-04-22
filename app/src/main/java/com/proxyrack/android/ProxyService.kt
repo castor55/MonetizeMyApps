@@ -1,5 +1,6 @@
 package com.proxyrack
 
+import com.sun.xml.internal.bind.v2.runtime.unmarshaller.XsiNilLoader
 import java.io.*
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -179,7 +180,7 @@ class ProxyService : Service() {
     /**
      * Retrieves user location, which is used for registration on backconnect server
      */
-    private fun getLocation(): Single<Geolocation> {
+    private fun getLocation(): XsiNilLoader.Single<Geolocation> {
         val geoClient = createRetrofitClient("http://ip-api.com/")
         val geoService = geoClient.create(GeolocationService::class.java)
         return geoService.location

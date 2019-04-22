@@ -1,1 +1,1 @@
-include ':app', ':ProxyRackLib'
+include ':app'
