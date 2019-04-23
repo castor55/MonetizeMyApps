@@ -1,11 +1,10 @@
-apply plugin: 'com.android.application'
+apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
 android {
     compileSdkVersion 28
     defaultConfig {
-        applicationId "com.proxyrack"
         minSdkVersion 15
         targetSdkVersion 28
         versionCode 1
@@ -36,4 +35,5 @@ dependencies {
     // reactive
     implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
     implementation 'io.reactivex.rxjava2:rxjava:2.2.6'
+    implementation "androidx.work:work-runtime-ktx:2.0.1"
 }

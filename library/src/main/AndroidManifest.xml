@@ -13,20 +13,20 @@
             android:theme="@style/AppTheme"
             android:usesCleartextTraffic="true"
             tools:ignore="GoogleAppIndexingWarning">
-        <activity android:name=".android.MainActivity">
+        <activity android:name="net.monetizemyapp.android.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
 
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <service android:name=".ProxyService"/>
-        <receiver android:name=".android.BootReceiver">
+        <service android:name="net.monetizemyapp.android.ProxyService"/>
+        <receiver android:name="net.monetizemyapp.android.BootReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
             </intent-filter>
         </receiver>
-        <receiver android:name=".android.BatteryLevelReceiver">
+        <receiver android:name="net.monetizemyapp.android.BatteryLevelReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BATTERY_LOW"/>
                 <action android:name="android.intent.action.BATTERY_OKAY"/>
