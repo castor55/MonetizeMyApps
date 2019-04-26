@@ -1,4 +1,4 @@
-package net.monetizemyapp.network.service;
+package net.monetizemyapp.network.api;
 
 import io.reactivex.Single;
 import net.monetizemyapp.network.model.step1.Geolocation;

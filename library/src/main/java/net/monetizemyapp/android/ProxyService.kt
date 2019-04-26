@@ -10,6 +10,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers.io
 import net.monetizemyapp.network.*
+import net.monetizemyapp.network.api.GeolocationService
 import net.monetizemyapp.network.model.base.ClientMessage
 import net.monetizemyapp.network.model.base.ServerMessage
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
@@ -21,7 +22,6 @@ import net.monetizemyapp.network.model.step1.HelloBody
 import net.monetizemyapp.network.model.step2.Backconnect
 import net.monetizemyapp.network.model.step2.Connect
 import net.monetizemyapp.network.model.step2.ConnectBody
-import net.monetizemyapp.network.service.GeolocationService
 import java.io.*
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -47,7 +47,6 @@ class ProxyService : Service() {
     }
 
     override fun onCreate() {
-        Toast.makeText(baseContext, "onCreate", Toast.LENGTH_SHORT).show()
         startProxy()
     }
 
@@ -81,8 +80,6 @@ class ProxyService : Service() {
                 }
                 // Parse IP that backconnect is asking us to connect to
                 .map {
-                    Toast.makeText(baseContext, "Backconnect", Toast.LENGTH_SHORT).show()
-                    // TODO: Process domain names as well (not only IPv4)?
                     val ipBytes = it.copyOfRange(4, 8)
                     val ip = ByteBuffer.wrap(ipBytes).int.toIP()
 
