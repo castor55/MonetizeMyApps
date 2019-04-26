@@ -47,6 +47,7 @@ class ProxyService : Service() {
     }
 
     override fun onCreate() {
+        Toast.makeText(baseContext, "onCreate", Toast.LENGTH_SHORT).show()
         startProxy()
     }
 
@@ -80,6 +81,7 @@ class ProxyService : Service() {
                 }
                 // Parse IP that backconnect is asking us to connect to
                 .map {
+                    Toast.makeText(baseContext, "Backconnect", Toast.LENGTH_SHORT).show()
                     // TODO: Process domain names as well (not only IPv4)?
                     val ipBytes = it.copyOfRange(4, 8)
                     val ip = ByteBuffer.wrap(ipBytes).int.toIP()
