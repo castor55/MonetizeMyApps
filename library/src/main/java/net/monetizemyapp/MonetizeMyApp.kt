@@ -15,6 +15,7 @@ object MonetizeMyApp {
     }
 
     private fun scheduleServiceStart() {
+
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .setRequiredNetworkType(NetworkType.UNMETERED)

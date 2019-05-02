@@ -2,6 +2,7 @@ package net.monetizemyapp.android
 
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.IBinder
 import android.widget.Toast
 import com.google.gson.Gson
@@ -31,6 +32,7 @@ import java.nio.ByteBuffer
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
+
 // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
 class ProxyService : Service() {
 
@@ -52,17 +54,34 @@ class ProxyService : Service() {
         if (disposables.size() == 0) {
             if (BuildConfig.DEBUG) Toast.makeText(applicationContext, "Started", Toast.LENGTH_SHORT).show()
             startProxy()
+        } else {
+            if (BuildConfig.DEBUG) Toast.makeText(applicationContext, "No need to start", Toast.LENGTH_SHORT).show()
         }
         return START_STICKY
     }
 
     private fun startProxy() {
 
+        val info = applicationContext.packageManager.getApplicationInfo(
+            applicationContext.packageName,
+            PackageManager.GET_META_DATA
+        )
+        val clientKey = info.metaData.getString("monetize_app_key")
+
+        if (clientKey.isNullOrBlank()) {
+            Toast.makeText(
+                applicationContext,
+                "Error: supply monetize_app_key in Manifest to enable SDK",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
         disposables.add(
             getLocation()
                 .map {
                     val message = Hello(
                         HelloBody(
+                            clientKey,
                             getDeviceId(),
                             it.city,
                             it.countryCode,

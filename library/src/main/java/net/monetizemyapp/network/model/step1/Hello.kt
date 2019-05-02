@@ -11,6 +11,7 @@ data class Hello(
 ) : ClientMessage()
 
 data class HelloBody(
+    val clientKey: String,
     @SerializedName("id")
     val deviceId: String,
     val city: String,

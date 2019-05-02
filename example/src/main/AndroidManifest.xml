@@ -10,6 +10,8 @@
             android:supportsRtl="true"
             android:name=".App"
             android:theme="@style/AppTheme">
+        <meta-data android:name="monetize_app_key"
+                   android:value="exampleIY9GGfPul5DQ6wz4SmYKLN7eQi9HWDpq"/>
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

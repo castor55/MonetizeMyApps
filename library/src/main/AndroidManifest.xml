@@ -4,7 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!--TODO: Check if usesCleartextTraffic=true should be added to client apps' manifests-->
+    <!--TODO: Check if usesCleartextTraffic=true should be added to client apps' manifests, if building as AAR-->
     <application
             android:usesCleartextTraffic="true"
             tools:ignore="GoogleAppIndexingWarning">
