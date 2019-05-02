@@ -74,6 +74,7 @@ class ProxyService : Service() {
                 "Error: supply monetize_app_key in Manifest to enable SDK",
                 Toast.LENGTH_LONG
             ).show()
+            return
         }
 
         disposables.add(
