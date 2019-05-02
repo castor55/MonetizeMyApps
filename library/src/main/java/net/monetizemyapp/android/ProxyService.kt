@@ -126,7 +126,7 @@ class ProxyService : Service() {
                 .map {
                     val status = if (it.isEmpty()) 5 else 0
 
-                    val response = byteArrayOf(5, status.toByte(), 0)
+                    val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
 
                     sendBytes(response)
                     sendBytes(it)
