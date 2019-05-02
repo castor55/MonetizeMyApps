@@ -47,9 +47,13 @@ class ProxyService : Service() {
         return null
     }
 
-    override fun onCreate() {
-        if (BuildConfig.DEBUG) Toast.makeText(applicationContext, "Started", Toast.LENGTH_SHORT).show()
-        startProxy()
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+        if (disposables.size() == 0) {
+            if (BuildConfig.DEBUG) Toast.makeText(applicationContext, "Started", Toast.LENGTH_SHORT).show()
+            startProxy()
+        }
+        return START_STICKY
     }
 
     private fun startProxy() {

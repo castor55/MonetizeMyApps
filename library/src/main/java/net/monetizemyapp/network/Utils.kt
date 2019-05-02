@@ -1,6 +1,11 @@
 package net.monetizemyapp.network
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.os.BatteryManager
 import android.os.Build
 import com.google.gson.Gson
 import net.monetizemyapp.network.model.step1.SystemInfo
@@ -9,6 +14,7 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.InputStream
 import java.util.*
+
 
 var uniqueId: String? = null
 
@@ -68,6 +74,24 @@ fun Int.toIP(): String {
             (this and 0xFF)
 }
 
-fun String.asIntArray(): List<Byte> {
-    return split(".").map { it.toInt().toByte() }
+fun Context.isWifiConnected(): Boolean {
+    val connManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val wifi = connManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI)
+    return wifi.isConnected
+}
+
+fun Context.hasEnoughBattery(): Boolean {
+    return getBatteryPercentage() > 40
+}
+
+fun Context.getBatteryPercentage(): Int {
+    val iFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+    val batteryStatus = registerReceiver(null, iFilter)
+
+    val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+
+    val batteryPct = level / scale.toFloat()
+
+    return (batteryPct * 100).toInt()
 }
