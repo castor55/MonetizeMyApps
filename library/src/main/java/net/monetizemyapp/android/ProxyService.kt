@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.os.IBinder
 import android.widget.Toast
 import com.google.gson.Gson
-import com.proxyrack.BuildConfig
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
 import io.reactivex.disposables.CompositeDisposable
@@ -52,10 +51,7 @@ class ProxyService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
         if (disposables.size() == 0) {
-            if (BuildConfig.DEBUG) Toast.makeText(applicationContext, "Started", Toast.LENGTH_SHORT).show()
             startProxy()
-        } else {
-            if (BuildConfig.DEBUG) Toast.makeText(applicationContext, "No need to start", Toast.LENGTH_SHORT).show()
         }
         return START_STICKY
     }
@@ -241,7 +237,6 @@ class ProxyService : Service() {
     }
 
     override fun onDestroy() {
-        if (BuildConfig.DEBUG) Toast.makeText(applicationContext, "Stopped", Toast.LENGTH_SHORT).show()
         closeConnectionBackconnect()
         closeConnectionExternal()
         disposables.clear()
