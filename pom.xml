@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dependency>
+    <groupId>net.monetizemyapp</groupId>
+    <artifactId>library</artifactId>
+    <version>0.3</version>
+</dependency>
