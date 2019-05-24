@@ -15,7 +15,7 @@ allprojects {
 Step 2: Add the dependency
 ```
 dependencies {
-  implementation 'com.github.proxyrack:MonetizeMyApp:latest.version'
+  implementation 'com.github.monetizemyapps:MonetizeMyApps:latest.version'
 }
 ```
 
