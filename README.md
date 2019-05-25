@@ -27,5 +27,12 @@ override fun onCreate() {
 }
 ```
 
+Step 4: Supply monetize_app_key in Manifest
+```
+<meta-data 
+  android:name="monetize_app_key"
+  android:value="YOUR_APP_KEY"/>
+```
+
 ## License
 [APACHE 2.0](https://choosealicense.com/licenses/apache-2.0/)
