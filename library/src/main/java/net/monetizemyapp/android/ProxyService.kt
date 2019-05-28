@@ -149,9 +149,15 @@ class ProxyService : Service() {
         val host = "monetizemyapp.net"
         val port = 443
 
-        // (every exchange happens in a fresh socket)
+        // almost every exchange happens in a fresh socket
         val isConnectionActive = socket != null && socket!!.isConnected
-        if (isConnectionActive) closeConnectionBackconnect()
+        if (isConnectionActive) {
+
+            // ... unless it's a ping-pong communication, which happens on the same socket
+            if (message !is Pong) {
+                closeConnectionBackconnect()
+            }
+        }
 
         // Start a connection
         socket = createSocket(host, port)
