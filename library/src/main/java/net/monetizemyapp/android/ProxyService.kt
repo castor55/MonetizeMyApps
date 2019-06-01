@@ -6,16 +6,19 @@ import android.content.pm.PackageManager
 import android.os.IBinder
 import android.widget.Toast
 import com.google.gson.Gson
+import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers.io
+import io.reactivex.schedulers.Schedulers.newThread
 import net.monetizemyapp.network.*
 import net.monetizemyapp.network.api.GeolocationService
 import net.monetizemyapp.network.model.base.ClientMessage
 import net.monetizemyapp.network.model.base.ServerMessage
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.base.ServerMessageType
+import net.monetizemyapp.network.model.step0.Ping
 import net.monetizemyapp.network.model.step0.Pong
 import net.monetizemyapp.network.model.step1.Geolocation
 import net.monetizemyapp.network.model.step1.Hello
@@ -27,17 +30,12 @@ import java.io.*
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
-import java.nio.ByteBuffer
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 
 // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
 class ProxyService : Service() {
-
-    private var socket: SSLSocket? = null
-    private var readerStream: DataInputStream? = null
-    private var writerStream: DataOutputStream? = null
 
     private var socketExternal: Socket? = null
     private var readerStreamExternal: InputStream? = null
@@ -73,103 +71,118 @@ class ProxyService : Service() {
             return
         }
 
-        disposables.add(
-            getLocation()
-                .map {
-                    val message = Hello(
-                        HelloBody(
-                            clientKey,
-                            getDeviceId(),
-                            it.city,
-                            it.countryCode,
-                            getSystemInfo()
-                        )
+        disposables.add(getLocation()
+            .map {
+                val message = Hello(
+                    HelloBody(
+                        clientKey,
+                        getDeviceId(),
+                        it.city,
+                        it.countryCode,
+                        getSystemInfo()
                     )
-                    sendJson(message)
-                    waitForJson() as Backconnect
-                }
-                // Verify client token
-                .map {
-                    val message =
-                        Connect(ConnectBody(it.body.token))
-                    sendJson(message)
-                    waitForBytes()
-                }
-                // Start socks5 proxy and funnel traffic to server
-                .map {
-                    sendBytes(byteArrayOf(5, 0))
-                    waitForBytes()
-                }
-                // Parse IP that backconnect is asking us to connect to
-                .map {
-                    val ipBytes = it.copyOfRange(4, 8)
-                    val ip = ByteBuffer.wrap(ipBytes).int.toIP()
+                )
+                val socket = createSocket()
+                socket.sendJson(message)
 
-                    val portByte = it[9]
-                    val port = portByte.toInt()
+                var result: ServerMessage
+                while (true) {
+                    result = socket.waitForJson()
+                    if (result is Backconnect) {
+                        openSocket2(result)
 
-                    InetSocketAddress(ip, port)
-                }
-                // Get bytes from external source
-                .map {
-                    try {
-                        connectExternal(it)
-                    } catch (e: FileNotFoundException) {
-                        return@map ByteArray(0)
+                    } else if (result is Ping) {
+                        // Exchange ping-pong messages, on first socket only
+                        socket.sendJson(Pong())
                     }
-                    waitForExternalBytes()
                 }
-                // Return bytes, or error, to the client
-                .map {
-                    val status = if (it.isEmpty()) 5 else 0
+            }
+            .subscribeOn(newThread())
+            .observeOn(mainThread())
+            .subscribe())
 
-                    val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
 
-                    sendBytes(response)
-                    sendBytes(it)
-                }
-                .map { closeConnectionBackconnect() }
-                .subscribeOn(io())
-                .observeOn(mainThread())
-                .subscribe({
-                    // Repeat. Continue listening for requests
-                    startProxy()
-                }, { t ->
-                    Toast.makeText(baseContext, t.localizedMessage, Toast.LENGTH_LONG).show()
-                    t.printStackTrace()
-                })
-        )
+//                // Multiple backconnect connections are supported, so creating a thread for each socket
+//                .subscribeOn(newThread())
+//                // Start socks5 proxy and funnel traffic to server
+//                .map {
+//                    sendBytes(byteArrayOf(5, 0))
+//                    waitForBytes()
+//                }
+//                // Parse IP that backconnect is asking us to connect to
+//                .map {
+//                    val ipBytes = it.copyOfRange(4, 8)
+//                    val ip = ByteBuffer.wrap(ipBytes).int.toIP()
+//
+//                    val portByte = it[9]
+//                    val port = portByte.toInt()
+//
+//                    InetSocketAddress(ip, port)
+//                }
+//                // Get bytes from external source
+//                .map {
+//                    try {
+//                        connectExternal(it)
+//                    } catch (e: FileNotFoundException) {
+//                        return@map ByteArray(0)
+//                    }
+//                    waitForExternalBytes()
+//                }
+//                // Return bytes, or error, to the client
+//                .map {
+//                    val status = if (it.isEmpty()) 5 else 0
+//
+//                    val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
+//
+//                    sendBytes(response)
+//                    sendBytes(it)
+//                }
+//                .map { closeConnectionExternal() }
+//    .subscribeOn(io())
+//    .observeOn(newThread())
+//    .subscribe(
+//    {
+//        // Repeat. Continue listening for requests
+//        startProxy()
+//    },
+//    {
+//        t ->
+//        Toast.makeText(baseContext, t.localizedMessage, Toast.LENGTH_LONG).show()
+//        t.printStackTrace()
+//    })
+//    )
+    }
+
+    private fun openSocket2(backconnect: Backconnect) {
+        // Verify client token
+        disposables.add(Observable.fromCallable {
+            val message = Connect(ConnectBody(backconnect.body.token))
+            val socket = createSocket()
+
+            socket.sendJson(message)
+            val result = socket.waitForBytes()
+            val result2 = result
+        }
+            .subscribeOn(io())
+            .observeOn(newThread())
+            .subscribe())
     }
 
     /**
      * Connects to backconnect server via SSL
      */
-    private fun sendJson(message: ClientMessage) {
-
-        val host = "monetizemyapp.net"
-        val port = 443
-
-        // almost every exchange happens in a fresh socket
-        val isConnectionActive = socket != null && socket!!.isConnected
-        if (isConnectionActive) {
-
-            // ... unless it's a ping-pong communication, which happens on the same socket
-            if (message !is Pong) {
-                closeConnectionBackconnect()
-            }
-        }
+    private fun Socket.sendJson(message: ClientMessage) {
 
         // Start a connection
-        socket = createSocket(host, port)
-        writerStream = DataOutputStream(socket!!.outputStream)
-        readerStream = DataInputStream(socket!!.inputStream)
+        val writerStream = DataOutputStream(outputStream)
+        val readerStream = DataInputStream(inputStream)
 
         // Prepare message body, indicating end of string with a special char
         val body = Gson().toJson(message) + endOfString()
 
         // Send message to server immediately
-        writerStream!!.write(body.toByteArray())
-        writerStream!!.flush()
+        writerStream.write(body.toByteArray())
+        writerStream.flush()
     }
 
     /**
@@ -186,14 +199,17 @@ class ProxyService : Service() {
         readerStreamExternal = URL("http://${address.hostName}").openStream()
     }
 
-    private fun sendBytes(bytes: ByteArray) {
+    private fun Socket.sendBytes(bytes: ByteArray) {
 
-        writerStream!!.write(bytes)
-        writerStream!!.flush()
+        getOutputStream().write(bytes)
+        getOutputStream().flush()
     }
 
     @Throws(IOException::class)
-    fun createSocket(host: String, port: Int): SSLSocket {
+    fun createSocket(): SSLSocket {
+
+        val host = "monetizemyapp.net"
+        val port = 443
 
         val socket = SSLSocketFactory.getDefault()
             .createSocket(host, port) as SSLSocket
@@ -201,24 +217,19 @@ class ProxyService : Service() {
         return socket
     }
 
-    private fun waitForJson(): ServerMessage {
-        var response = readerStream!!.getString()
+    private fun Socket.waitForJson(): ServerMessage {
+        val response = DataInputStream(getInputStream()).getString()
 
-        if (response.contains(ServerMessageType.PING)) {
-            if (socket!!.isConnected) {
-                sendJson(Pong())
-            }
-            response = readerStream!!.getString()
-        }
         // Convert server response to corresponding object type
         return when {
             response.contains(ServerMessageType.BACKCONNECT) -> response.toObject<Backconnect>()
+            response.contains(ServerMessageType.PING) -> response.toObject<Ping>()
             else -> ServerMessageEmpty()
         }
     }
 
-    private fun waitForBytes(): ByteArray {
-        return readerStream!!.getBytes()
+    private fun Socket.waitForBytes(): ByteArray {
+        return getInputStream().getBytes()
     }
 
     private fun waitForExternalBytes(): ByteArray {
@@ -243,19 +254,11 @@ class ProxyService : Service() {
     }
 
     override fun onDestroy() {
-        closeConnectionBackconnect()
         closeConnectionExternal()
         disposables.clear()
     }
 
-    private fun closeConnectionBackconnect() {
-        readerStream?.close()
-        writerStream?.close()
-        socket?.close()
-    }
-
     private fun closeConnectionExternal() {
-        readerStreamExternal?.close()
         socketExternal?.close()
     }
 }
