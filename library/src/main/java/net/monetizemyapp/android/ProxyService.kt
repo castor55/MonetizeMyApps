@@ -10,7 +10,6 @@ import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.schedulers.Schedulers.io
 import io.reactivex.schedulers.Schedulers.newThread
 import net.monetizemyapp.network.*
 import net.monetizemyapp.network.api.GeolocationService
@@ -30,6 +29,7 @@ import java.io.*
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
+import java.nio.ByteBuffer
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -37,8 +37,7 @@ import javax.net.ssl.SSLSocketFactory
 // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
 class ProxyService : Service() {
 
-    private var socketExternal: Socket? = null
-    private var readerStreamExternal: InputStream? = null
+    private val sockets: MutableList<Socket> = ArrayList()
 
     private val disposables = CompositeDisposable()
 
@@ -83,13 +82,14 @@ class ProxyService : Service() {
                     )
                 )
                 val socket = createSocket()
+                sockets.add(socket)
                 socket.sendJson(message)
 
                 var result: ServerMessage
                 while (true) {
                     result = socket.waitForJson()
                     if (result is Backconnect) {
-                        openSocket2(result)
+                        startNewSession(result)
 
                     } else if (result is Ping) {
                         // Exchange ping-pong messages, on first socket only
@@ -99,72 +99,60 @@ class ProxyService : Service() {
             }
             .subscribeOn(newThread())
             .observeOn(mainThread())
-            .subscribe())
-
-
-//                // Multiple backconnect connections are supported, so creating a thread for each socket
-//                .subscribeOn(newThread())
-//                // Start socks5 proxy and funnel traffic to server
-//                .map {
-//                    sendBytes(byteArrayOf(5, 0))
-//                    waitForBytes()
-//                }
-//                // Parse IP that backconnect is asking us to connect to
-//                .map {
-//                    val ipBytes = it.copyOfRange(4, 8)
-//                    val ip = ByteBuffer.wrap(ipBytes).int.toIP()
-//
-//                    val portByte = it[9]
-//                    val port = portByte.toInt()
-//
-//                    InetSocketAddress(ip, port)
-//                }
-//                // Get bytes from external source
-//                .map {
-//                    try {
-//                        connectExternal(it)
-//                    } catch (e: FileNotFoundException) {
-//                        return@map ByteArray(0)
-//                    }
-//                    waitForExternalBytes()
-//                }
-//                // Return bytes, or error, to the client
-//                .map {
-//                    val status = if (it.isEmpty()) 5 else 0
-//
-//                    val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
-//
-//                    sendBytes(response)
-//                    sendBytes(it)
-//                }
-//                .map { closeConnectionExternal() }
-//    .subscribeOn(io())
-//    .observeOn(newThread())
-//    .subscribe(
-//    {
-//        // Repeat. Continue listening for requests
-//        startProxy()
-//    },
-//    {
-//        t ->
-//        Toast.makeText(baseContext, t.localizedMessage, Toast.LENGTH_LONG).show()
-//        t.printStackTrace()
-//    })
-//    )
+            .subscribe({},
+                { t ->
+                    Toast.makeText(baseContext, t.localizedMessage, Toast.LENGTH_LONG).show()
+                    t.printStackTrace()
+                })
+        )
     }
 
-    private fun openSocket2(backconnect: Backconnect) {
-        // Verify client token
-        disposables.add(Observable.fromCallable {
-            val message = Connect(ConnectBody(backconnect.body.token))
-            val socket = createSocket()
+    private fun startNewSession(backconnect: Backconnect) {
 
+        disposables.add(Observable.fromCallable {
+
+            // Multiple backconnect connections are supported, so creating sockets in different threads
+            val socket = createSocket()
+            sockets.add(socket)
+
+            // Verify client token
+            val message = Connect(ConnectBody(backconnect.body.token))
             socket.sendJson(message)
-            val result = socket.waitForBytes()
-            val result2 = result
+            socket.waitForBytes()
+
+            // Start socks5 proxy and funnel traffic to server
+            socket.sendBytes(byteArrayOf(5, 0))
+            val requestBytes = socket.waitForBytes()
+
+            // Parse IP that backconnect is asking us to connect to
+            val ipBytes = requestBytes.copyOfRange(4, 8)
+            val ip = ByteBuffer.wrap(ipBytes).int.toIP()
+            val portByte = requestBytes[9]
+            val port = portByte.toInt()
+
+            // Get bytes from external source
+            val address = InetSocketAddress(ip, port)
+
+            var externalResponseBytes: ByteArray
+            try {
+                val streamExternal = createStreamExternal(address)
+                externalResponseBytes = streamExternal.waitForExternalBytes()
+                streamExternal.close()
+            } catch (e: FileNotFoundException) {
+                externalResponseBytes = ByteArray(0)
+            }
+
+            // Return bytes, or error, to the client
+            val status = if (externalResponseBytes.isEmpty()) 5 else 0
+
+            val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
+
+            socket.sendBytes(response)
+            socket.sendBytes(externalResponseBytes)
+            socket.close()
         }
-            .subscribeOn(io())
-            .observeOn(newThread())
+            .subscribeOn(newThread())
+            .observeOn(mainThread())
             .subscribe())
     }
 
@@ -175,7 +163,6 @@ class ProxyService : Service() {
 
         // Start a connection
         val writerStream = DataOutputStream(outputStream)
-        val readerStream = DataInputStream(inputStream)
 
         // Prepare message body, indicating end of string with a special char
         val body = Gson().toJson(message) + endOfString()
@@ -189,14 +176,10 @@ class ProxyService : Service() {
      * Connects to external server.
      * These bytes will be funneled to backconnect server
      */
-    private fun connectExternal(address: InetSocketAddress) {
-
-        // (every exchange happens in a fresh socket)
-        val isConnectionActive = socketExternal != null && socketExternal!!.isConnected
-        if (isConnectionActive) closeConnectionExternal()
+    private fun createStreamExternal(address: InetSocketAddress): InputStream {
 
         // Start a connection
-        readerStreamExternal = URL("http://${address.hostName}").openStream()
+        return URL("http://${address.hostName}").openStream()
     }
 
     private fun Socket.sendBytes(bytes: ByteArray) {
@@ -232,14 +215,14 @@ class ProxyService : Service() {
         return getInputStream().getBytes()
     }
 
-    private fun waitForExternalBytes(): ByteArray {
+    private fun InputStream.waitForExternalBytes(): ByteArray {
         val outputStream = ByteArrayOutputStream()
         val data = ByteArray(4096)
 
-        var length = readerStreamExternal!!.read(data)
+        var length = read(data)
         while (length > 0) {
             outputStream.write(data, 0, length)
-            length = readerStreamExternal!!.read(data)
+            length = read(data)
         }
         return outputStream.toByteArray()
     }
@@ -254,11 +237,7 @@ class ProxyService : Service() {
     }
 
     override fun onDestroy() {
-        closeConnectionExternal()
+        sockets.forEach { it.close() }
         disposables.clear()
-    }
-
-    private fun closeConnectionExternal() {
-        socketExternal?.close()
     }
 }
