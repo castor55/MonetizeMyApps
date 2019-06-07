@@ -14,11 +14,13 @@ import java.util.*
 var uniqueId: String? = null
 
 @SuppressLint("HardwareIds")
-fun getDeviceId(): String {
+fun getDeviceId(ip: String): String {
     if (uniqueId == null) {
         uniqueId = UUID.randomUUID().toString()
+            .replace("-", "")
+            .take(16)
     }
-    return uniqueId!!
+    return "${uniqueId}_$ip"
 }
 
 @SuppressLint("HardwareIds")

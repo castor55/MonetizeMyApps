@@ -75,7 +75,7 @@ class ProxyService : Service() {
                 val message = Hello(
                     HelloBody(
                         clientKey,
-                        getDeviceId(),
+                        getDeviceId(it.ip),
                         it.city,
                         it.countryCode,
                         getSystemInfo()
