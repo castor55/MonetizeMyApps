@@ -19,7 +19,14 @@ dependencies {
 }
 ```
 
-Step 3: Init the library inside Application class
+Step 3: Supply monetize_app_key in Manifest
+```
+<meta-data
+  android:name="monetize_app_key"
+  android:value="YOUR_APP_KEY"/>
+```
+
+Step 4: Init the library inside Application class
 ```
 override fun onCreate() {
   ...
@@ -27,11 +34,14 @@ override fun onCreate() {
 }
 ```
 
-Step 4: Supply monetize_app_key in Manifest
+Step 5: In your settings activity, add "Monetization settings" button, and set a click listener
 ```
-<meta-data 
-  android:name="monetize_app_key"
-  android:value="YOUR_APP_KEY"/>
+override fun onCreate() {
+  ...
+  btnMonetizationSettings.setOnClickListener {
+    startActivity(this, MonetizationSettingsActivity::class.java)
+  }
+}
 ```
 
 ## License

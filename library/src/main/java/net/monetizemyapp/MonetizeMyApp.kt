@@ -6,8 +6,6 @@ import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.proxyrack.BuildConfig
-import net.monetizemyapp.android.MonetizationSettingsActivity
 import net.monetizemyapp.android.PromptActivity
 import net.monetizemyapp.android.ProxyServiceStarter
 import net.monetizemyapp.network.*
@@ -18,15 +16,6 @@ object MonetizeMyApp {
     fun init(context: Context) {
 
         val mode = context.prefs.getString(PREFS_KEY_MODE, PREFS_VALUE_MODE_UNSELECTED)
-
-        // todo remove
-        if (BuildConfig.DEBUG) {
-
-            val intent = Intent(context, MonetizationSettingsActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-            return
-        }
 
         if (mode == PREFS_VALUE_MODE_UNSELECTED) {
 
