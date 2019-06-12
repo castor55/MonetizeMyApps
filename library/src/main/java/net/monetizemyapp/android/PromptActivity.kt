@@ -6,10 +6,7 @@ import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_prompt.*
 import net.monetizemyapp.MonetizeMyApp
-import net.monetizemyapp.network.EXTRA_PACKAGE_NAME
-import net.monetizemyapp.network.PREFS_PROMPT_SHOWN
-import net.monetizemyapp.network.PREFS_SERVICE_ENABLED
-import net.monetizemyapp.network.prefs
+import net.monetizemyapp.network.*
 
 class PromptActivity : AppCompatActivity() {
 
@@ -20,15 +17,13 @@ class PromptActivity : AppCompatActivity() {
         showParentAppIcon()
 
         btnAgree.setOnClickListener {
-            prefs.edit().putBoolean(PREFS_SERVICE_ENABLED, true).apply()
-            prefs.edit().putBoolean(PREFS_PROMPT_SHOWN, true).apply()
+            prefs.edit().putString(PREFS_KEY_MODE, PREFS_VALUE_MODE_PROXY).apply()
 
             MonetizeMyApp.scheduleServiceStart()
             finish()
         }
         btnDisagree.setOnClickListener {
-            prefs.edit().putBoolean(PREFS_SERVICE_ENABLED, false).apply()
-            prefs.edit().putBoolean(PREFS_PROMPT_SHOWN, true).apply()
+            prefs.edit().putString(PREFS_KEY_MODE, PREFS_VALUE_MODE_ADS).apply()
 
             finish()
         }

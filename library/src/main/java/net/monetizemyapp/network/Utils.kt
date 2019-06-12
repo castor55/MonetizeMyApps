@@ -78,5 +78,8 @@ val Context.prefs: SharedPreferences
     get() = PreferenceManager.getDefaultSharedPreferences(this)
 
 const val EXTRA_PACKAGE_NAME = "package_name"
-const val PREFS_PROMPT_SHOWN = "prompt_shown"
-const val PREFS_SERVICE_ENABLED = "service_enabled"
+const val PREFS_KEY_MODE = "service_enabled"
+const val PREFS_VALUE_MODE_UNSELECTED = "mode_unselected"
+const val PREFS_VALUE_MODE_PROXY = "mode_proxy"
+const val PREFS_VALUE_MODE_ADS = "mode_ads"
+const val PREFS_VALUE_MODE_SUBSCRIPTION = "mode_subscription"

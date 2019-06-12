@@ -10,4 +10,12 @@
     </string>
     <string name="resource_usage">We do not load your CPU, RAM and Internet connection bandwidth</string>
     <string name="hint_turn_off">You may turn this off from the settings menu</string>
+    <string name="choose_your_usage_plan">Choose your usage plan</string>
+    <string name="free">Free</string>
+    <string name="hint_free">use the app and be a Peer</string>
+    <string name="ads">Advertising</string>
+    <string name="hint_ads">use the app with advertisements</string>
+    <string name="subscription">Subscription</string>
+    <string name="hint_subscription">use the app for an annual subscription</string>
+    <string name="settings">Settings</string>
 </resources>

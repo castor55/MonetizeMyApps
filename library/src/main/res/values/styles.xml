@@ -6,4 +6,33 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
+    <style name="ButtonSelected" parent="Widget.AppCompat.Button.Colored">
+        <item name="android:textSize">20sp</item>
+        <item name="android:paddingTop">16dp</item>
+        <item name="android:paddingBottom">40dp</item>
+        <item name="android:textColor">#FFF</item>
+    </style>
+
+    <style name="ButtonUnselected" parent="Widget.AppCompat.Button">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textColor">@color/colorAccent</item>
+        <item name="android:background">#FFF</item>
+        <item name="android:paddingTop">16dp</item>
+        <item name="android:paddingBottom">40dp</item>
+    </style>
+
+    <style name="HintBase">
+        <item name="android:layout_marginTop">24dp</item>
+        <item name="android:elevation">6dp</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <style name="HintSelected" parent="HintBase">
+        <item name="android:textColor">#FFF</item>
+    </style>
+
+    <style name="HintUnselected" parent="HintBase">
+        <item name="android:textColor">@color/colorPrimary</item>
+    </style>
+
 </resources>
