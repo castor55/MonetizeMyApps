@@ -23,7 +23,7 @@ Step 3: Init the library inside Application class
 ```
 override fun onCreate() {
   ...
-  MonetizeMyApp.init()
+  MonetizeMyApp.init(applicationContext)
 }
 ```
 

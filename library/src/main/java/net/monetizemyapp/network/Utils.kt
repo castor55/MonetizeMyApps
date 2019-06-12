@@ -1,7 +1,10 @@
 package net.monetizemyapp.network
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
+import android.preference.PreferenceManager
 import com.google.gson.Gson
 import net.monetizemyapp.network.model.step1.SystemInfo
 import retrofit2.Retrofit
@@ -70,3 +73,10 @@ fun Int.toIP(): String {
             (this shr 8 and 0xFF) + "." +
             (this and 0xFF)
 }
+
+val Context.prefs: SharedPreferences
+    get() = PreferenceManager.getDefaultSharedPreferences(this)
+
+const val EXTRA_PACKAGE_NAME = "package_name"
+const val PREFS_PROMPT_SHOWN = "prompt_shown"
+const val PREFS_SERVICE_ENABLED = "service_enabled"

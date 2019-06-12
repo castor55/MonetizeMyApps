@@ -29,15 +29,16 @@ import java.io.*
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
+import java.net.URLConnection
 import java.nio.ByteBuffer
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
-
 
 // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
 class ProxyService : Service() {
 
     private val sockets: MutableList<Socket> = ArrayList()
+    private val socketsExternal: MutableList<URLConnection> = ArrayList()
 
     private val disposables = CompositeDisposable()
 
@@ -133,27 +134,37 @@ class ProxyService : Service() {
             // Get bytes from external source
             val address = InetSocketAddress(ip, port)
 
-            var externalResponseBytes: ByteArray
-            try {
-                val streamExternal = createStreamExternal(address)
-                externalResponseBytes = streamExternal.waitForExternalBytes()
-                streamExternal.close()
-            } catch (e: FileNotFoundException) {
-                externalResponseBytes = ByteArray(0)
-            }
+            val socketExternal = createSocketExternal(address)
+            socketsExternal.add(socketExternal)
 
-            // Return bytes, or error, to the client
-            val status = if (externalResponseBytes.isEmpty()) 5 else 0
-
-            val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
-
-            socket.sendBytes(response)
-            socket.sendBytes(externalResponseBytes)
-            socket.close()
+            exchangeBytes(socket, socketExternal)
         }
             .subscribeOn(newThread())
             .observeOn(mainThread())
             .subscribe())
+    }
+
+    private fun exchangeBytes(socket: Socket, socketExternal: URLConnection) {
+        while (true) {
+            val externalResponseBytes = try {
+                socketExternal.waitForExternalBytes()
+            } catch (e: FileNotFoundException) {
+                ByteArray(0)
+            }
+            // Return bytes, or error, to the client
+            val status = if (externalResponseBytes.isEmpty()) 5 else 0
+
+            val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
+            socket.sendBytes(response)
+
+            if (externalResponseBytes.isNotEmpty()) {
+                socket.sendBytes(externalResponseBytes)
+                val socketBytes = socket.waitForBytes()
+                socketExternal.sendBytes(socketBytes)
+            } else {
+                return
+            }
+        }
     }
 
     /**
@@ -172,17 +183,13 @@ class ProxyService : Service() {
         writerStream.flush()
     }
 
-    /**
-     * Connects to external server.
-     * These bytes will be funneled to backconnect server
-     */
-    private fun createStreamExternal(address: InetSocketAddress): InputStream {
+    private fun Socket.sendBytes(bytes: ByteArray) {
 
-        // Start a connection
-        return URL("http://${address.hostName}").openStream()
+        getOutputStream().write(bytes)
+        getOutputStream().flush()
     }
 
-    private fun Socket.sendBytes(bytes: ByteArray) {
+    private fun URLConnection.sendBytes(bytes: ByteArray) {
 
         getOutputStream().write(bytes)
         getOutputStream().flush()
@@ -200,6 +207,16 @@ class ProxyService : Service() {
         return socket
     }
 
+    /**
+     * Connects to external server.
+     * These bytes will be funneled to backconnect server
+     */
+    private fun createSocketExternal(address: InetSocketAddress): URLConnection {
+
+        return URL("http://${address.hostName}:${address.port}").openConnection()
+            .apply { connect() }
+    }
+
     private fun Socket.waitForJson(): ServerMessage {
         val response = DataInputStream(getInputStream()).getString()
 
@@ -215,14 +232,15 @@ class ProxyService : Service() {
         return getInputStream().getBytes()
     }
 
-    private fun InputStream.waitForExternalBytes(): ByteArray {
+    private fun URLConnection.waitForExternalBytes(): ByteArray {
+
         val outputStream = ByteArrayOutputStream()
         val data = ByteArray(4096)
 
-        var length = read(data)
+        var length = getInputStream().read(data)
         while (length > 0) {
             outputStream.write(data, 0, length)
-            length = read(data)
+            length = getInputStream().read(data)
         }
         return outputStream.toByteArray()
     }

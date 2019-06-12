@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          xmlns:tools="http://schemas.android.com/tools" package="com.proxyrack">
+          xmlns:tools="http://schemas.android.com/tools"
+          package="com.proxyrack">
 
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!--TODO: Check if usesCleartextTraffic=true should be added to client apps' manifests, if building as AAR-->
     <application
             android:usesCleartextTraffic="true"
+            android:theme="@style/AppTheme"
             tools:ignore="GoogleAppIndexingWarning">
+        <activity android:name="net.monetizemyapp.android.PromptActivity">
+        </activity>
 
         <service android:name="net.monetizemyapp.android.ProxyService"/>
 
@@ -16,7 +19,6 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
             </intent-filter>
         </receiver>
-
     </application>
 
 </manifest>

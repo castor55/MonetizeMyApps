@@ -1,0 +1,13 @@
+<resources>
+    <string name="prompt">Your use of this extension is free of charge in exchange for safely using internet connection
+        of your device\'s resources
+    </string>
+    <string name="disagree">Disagree</string>
+    <string name="agree">Agree</string>
+    <string name="disclaimer">By clicking \"Agree\" you confirm your consent and agree to have read and accepted the
+        terms
+        of service of the SDK
+    </string>
+    <string name="resource_usage">We do not load your CPU, RAM and Internet connection bandwidth</string>
+    <string name="hint_turn_off">You may turn this off from the settings menu</string>
+</resources>
