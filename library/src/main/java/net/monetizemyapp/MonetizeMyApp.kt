@@ -2,6 +2,7 @@ package net.monetizemyapp
 
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
@@ -19,10 +20,12 @@ object MonetizeMyApp {
 
         if (mode == PREFS_VALUE_MODE_UNSELECTED) {
 
-            val intent = Intent(context, PromptActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            intent.putExtra(EXTRA_PACKAGE_NAME, context.packageName)
-            context.startActivity(intent)
+            Handler().postDelayed({
+                val intent = Intent(context, PromptActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                intent.putExtra(EXTRA_PACKAGE_NAME, context.packageName)
+                context.startActivity(intent)
+            }, 3000)
 
         } else if (mode == PREFS_VALUE_MODE_PROXY) {
             scheduleServiceStart()
