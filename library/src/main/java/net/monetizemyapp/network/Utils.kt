@@ -34,13 +34,6 @@ fun getSystemInfo(): SystemInfo {
     )
 }
 
-fun createRetrofitClient(url: String): Retrofit {
-    return Retrofit.Builder()
-        .baseUrl(url)
-        .addConverterFactory(GsonConverterFactory.create())
-        .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
-        .build()
-}
 
 fun InputStream.getString(): String {
 
