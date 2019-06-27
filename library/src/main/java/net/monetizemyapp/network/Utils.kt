@@ -7,24 +7,21 @@ import android.os.Build
 import android.preference.PreferenceManager
 import com.google.gson.Gson
 import net.monetizemyapp.network.model.step1.SystemInfo
-import retrofit2.Retrofit
-import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
-import retrofit2.converter.gson.GsonConverterFactory
 import java.io.InputStream
 import java.util.*
 
 
 var uniqueId: String? = null
 
-@SuppressLint("HardwareIds")
-fun getDeviceId(ip: String): String {
-    if (uniqueId == null) {
-        uniqueId = UUID.randomUUID().toString()
-            .replace("-", "")
-            .take(16)
+val deviceId: String
+    get() {
+        if (uniqueId == null) {
+            uniqueId = UUID.randomUUID().toString()
+                .replace("-", "")
+                .take(16)
+        }
+        return "$uniqueId"
     }
-    return "${uniqueId}_$ip"
-}
 
 @SuppressLint("HardwareIds")
 fun getSystemInfo(): SystemInfo {
@@ -38,8 +35,7 @@ fun getSystemInfo(): SystemInfo {
 fun InputStream.getString(): String {
 
     val data = ByteArray(2048)
-    val length = read(data)
-
+    val length = read(data).takeIf { it > 0 } ?: 0
     val result = String(data, 0, length)
     return result.removeSuffix(endOfString())
 }

@@ -1,10 +1,11 @@
 package net.monetizemyapp.di
 
-import com.neovisionaries.ws.client.WebSocketFactory
 import net.monetizemyapp.network.api.GeolocationService
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import javax.net.ssl.SSLContext
+import java.net.Socket
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 
 object InjectorUtils {
     private object Network {
@@ -15,13 +16,20 @@ object InjectorUtils {
                 .build()
         }
 
-        private val webSocketFactory by lazy {  WebSocketFactory().apply {
-            sslContext = SSLContext.getInstance("TLSv1.2")
-        }}
-
-
         fun provideIpApiRetrofit() = ipApiRetrofit
+    }
 
+    object Sockets {
+        private val webSocketFactory by lazy {
+            SSLSocketFactory.getDefault()
+        }
+
+
+        fun provideSocketFactory() = webSocketFactory
+        fun provideSSlWebSocketConnection(url: String, port: Int, protocols: Array<String>): Socket =
+            provideSocketFactory().createSocket(url, port).apply {
+                (this as SSLSocket).enabledProtocols = protocols
+            }
 
     }
 

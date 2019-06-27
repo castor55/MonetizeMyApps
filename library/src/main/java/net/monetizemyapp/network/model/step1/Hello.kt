@@ -12,6 +12,7 @@ data class Hello(
 
 data class HelloBody(
     val clientKey: String,
+    val ip: String,
     @SerializedName("id")
     val deviceId: String,
     val city: String,
