@@ -139,22 +139,29 @@ class ProxyService : Service(), CoroutineScope {
         }
     }
 
-    private suspend fun startNewSession(backconnect: Backconnect) {
+    private fun startNewSession(backconnect: Backconnect) = launch {
+
+        val socket = InjectorUtils.Sockets.provideSSlWebSocketConnection(HOST, PORT, ENABLED_SOCKET_PROTOCOLS)
+        sockets.add(socket)
 
         // Verify client token
         val message = Connect(ConnectBody(backconnect.body.token))
-        serverSocketConnection.sendJson(message)
-        serverSocketConnection.waitForBytes()
+        socket.sendJson(message)
+        val firstBackconnectResponse = socket.waitForBytes()
+        logd(TAG, "firstBackconnectResponse = $firstBackconnectResponse\n")
 
         // Start socks5 proxy and funnel traffic to server
-        serverSocketConnection.sendBytes(byteArrayOf(5, 0))
-        val requestBytes = serverSocketConnection.waitForBytes()
+        socket.sendBytes(byteArrayOf(5, 0))
+        val requestBytes = socket.waitForBytes()
+        logd(TAG, "requestBytes = $requestBytes")
 
         // Parse IP that backconnect is asking us to connect to
         val ipBytes = requestBytes.copyOfRange(4, 8)
         val ip = ByteBuffer.wrap(ipBytes).int.toIP()
         val portByte = requestBytes[9]
         val port = portByte.toInt()
+
+        logd(TAG, "new socket connection credentials: ip = $ip, port = $port\n")
 
         // Get bytes from external source
         val address = InetSocketAddress(ip, port)
@@ -212,7 +219,6 @@ class ProxyService : Service(), CoroutineScope {
     }
 
     private fun URLConnection.sendBytes(bytes: ByteArray) {
-
         getOutputStream().write(bytes)
         getOutputStream().flush()
     }

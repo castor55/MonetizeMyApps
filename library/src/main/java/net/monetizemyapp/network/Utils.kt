@@ -43,7 +43,7 @@ fun InputStream.getString(): String {
 fun InputStream.getBytes(): ByteArray {
 
     val data = ByteArray(512)
-    val length = read(data)
+    val length = read(data).takeIf { it >= 0 } ?: 0
 
     return data.copyOfRange(0, length)
 }
