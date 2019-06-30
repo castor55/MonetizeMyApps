@@ -32,14 +32,6 @@ fun getSystemInfo(): SystemInfo {
 }
 
 
-fun InputStream.getString(): String {
-
-    val data = ByteArray(2048)
-    val length = read(data).takeIf { it > 0 } ?: 0
-    val result = String(data, 0, length)
-    return result.removeSuffix(endOfString())
-}
-
 fun InputStream.getBytes(): ByteArray {
 
     val data = ByteArray(512)
@@ -48,11 +40,9 @@ fun InputStream.getBytes(): ByteArray {
     return data.copyOfRange(0, length)
 }
 
-fun endOfString(): String {
-    return String(Character.toChars(Integer.parseInt("0000", 16)))
-}
 
-inline fun <reified T> String.toObject(): T {
+
+inline fun <reified T> String.fromJson(): T {
     return Gson().fromJson<T>(this, T::class.java)
 }
 

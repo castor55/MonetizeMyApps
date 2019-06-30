@@ -3,13 +3,11 @@ package net.monetizemyapp.android
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
-import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import net.monetizemyapp.di.InjectorUtils
 import net.monetizemyapp.network.*
-import net.monetizemyapp.network.model.base.ClientMessage
 import net.monetizemyapp.network.model.base.ServerMessage
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.base.ServerMessageType
@@ -19,20 +17,18 @@ import net.monetizemyapp.network.model.step0.Pong
 import net.monetizemyapp.network.model.step1.Hello
 import net.monetizemyapp.network.model.step1.HelloBody
 import net.monetizemyapp.network.model.step2.Backconnect
-import net.monetizemyapp.network.model.step2.Connect
-import net.monetizemyapp.network.model.step2.ConnectBody
 import net.monetizemyapp.toolbox.CoroutineContextPool
-import net.monetizemyapp.toolbox.extentions.getAppInfo
-import net.monetizemyapp.toolbox.extentions.logd
-import net.monetizemyapp.toolbox.extentions.loge
+import net.monetizemyapp.toolbox.extentions.*
 import retrofit2.HttpException
 import retrofit2.Response
-import java.io.*
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.FileNotFoundException
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 import java.net.URLConnection
-import java.nio.ByteBuffer
 import kotlin.coroutines.CoroutineContext
 
 // TODO: If no message is received for last 10 minutes, client should assume connection is dead and reconnect.
@@ -60,6 +56,57 @@ class ProxyService : Service(), CoroutineScope {
 
     private val locationApi by lazy { InjectorUtils.Api.provideLocationApi() }
 
+    private val testSocketConnection by lazy { TcpClient(serverSocketConnection, tcpClientCallback) }
+
+    val tcpClientCallback = object : TcpClient.OnSocketResponseListener {
+
+        override fun onError(error: String) {
+            loge(TAG, "onError : $error")
+        }
+
+        override fun onNewMessage(client: TcpClient, message: String) {
+            logd(TAG, "onNewMessage, message : $message")
+            val response = message.toObject()
+            logd(TAG, "onNewMessage, response : $response")
+            when (response) {
+                is ServerMessageEmpty -> {
+                    logd(TAG, "response message is empty")
+                }
+                is Ping -> {
+                    logd(TAG, "response message is Ping")
+                    client.sendMessage(Pong().toJson())
+                }
+                is Backconnect -> {
+                    var serverSocket: TcpClient?
+                    var backSocket: TcpClient? = null
+
+                    val serverListener = object : TcpClient.OnSocketResponseListener {
+                        override fun onNewMessage(client: TcpClient, message: String) {
+                            backSocket?.sendMessage(message)
+                        }
+
+                        override fun onError(error: String) {}
+                    }
+                    val socket =
+                        InjectorUtils.Sockets.provideSSlWebSocketConnection(HOST, PORT, ENABLED_SOCKET_PROTOCOLS)
+                    serverSocket = TcpClient(socket, serverListener)
+
+                    // todo implement logic for message exchange
+                    val backListener = object : TcpClient.OnSocketResponseListener {
+                        override fun onNewMessage(client: TcpClient, message: String) {
+                            serverSocket.sendMessage(message)
+                        }
+
+                        override fun onError(error: String) {}
+                    }
+                    /*val message = Connect(ConnectBody(response.body.token))
+                    client.sendMessage(message.toJson())*/
+                    logd(TAG, "response message is Backconnect")
+                }
+            }
+        }
+    }
+
     override fun onBind(intent: Intent): IBinder? {
         return null
     }
@@ -82,6 +129,7 @@ class ProxyService : Service(), CoroutineScope {
         }
 
         launch {
+
             val location: Response<IpApiResponse>? = try {
                 locationApi.getLocation()
             } catch (ex: HttpException) {
@@ -104,44 +152,52 @@ class ProxyService : Service(), CoroutineScope {
                     )
                 )
 
+                testSocketConnection.sendMessage(message.toJson())
 
-                serverSocketConnection.sendJson(message)
+                // Prepare message body, indicating end of string with a special char
 
-                var result: ServerMessage
-                while (true) {
-                    if (!serverSocketConnection.isConnected) {
-                        logd(TAG, "breaking socket loop : ${serverSocketConnection.localAddress}")
-                        break
-                    }
+                /*  serverSocketConnection.sendJson(message)
 
-                    result = serverSocketConnection.waitForJson()
+                  var result: ServerMessage
+                  while (true) {
+                      if (!serverSocketConnection.isConnected) {
+                          logd(TAG, "breaking socket loop : ${serverSocketConnection.localAddress}")
+                          break
+                      }
 
-                    if (result !is ServerMessageEmpty) {
-                        logd(TAG, "hello response : $result")
-                    }
+                      result = serverSocketConnection.waitForJson()
 
-                    when (result) {
-                        is Backconnect -> {
-                            startNewSession(result)
-                        }
-                        is Ping -> {
-                            // Exchange ping-pong messages, on first socket only
-                            serverSocketConnection.sendJson(Pong())
-                        }
-                        else -> {
+                      if (result !is ServerMessageEmpty) {
+                          logd(TAG, "hello response : $result")
+                      }
 
-                        }
+                      when (result) {
+                          is Backconnect -> {
+                              startNewSession(result)
+                          }
+                          is Ping -> {
+                              // Exchange ping-pong messages, on first socket only
+                              serverSocketConnection.sendJson(Pong())
+                          }
+                          else -> {
 
-                    }
-                }
+                          }
+
+                      }
+                  }*/
 
             }
         }
     }
 
+    private fun startNewBackconnectSession(backconnect: Backconnect) {
+
+
+    }
+
     private fun startNewSession(backconnect: Backconnect) = launch {
 
-        val socket = InjectorUtils.Sockets.provideSSlWebSocketConnection(HOST, PORT, ENABLED_SOCKET_PROTOCOLS)
+        /*val socket = InjectorUtils.Sockets.provideSSlWebSocketConnection(HOST, PORT, ENABLED_SOCKET_PROTOCOLS)
         sockets.add(socket)
 
         // Verify client token
@@ -169,7 +225,7 @@ class ProxyService : Service(), CoroutineScope {
         val socketExternal = createSocketExternal(address)
         socketsExternal.add(socketExternal)
 
-        exchangeBytes(serverSocketConnection, socketExternal)
+        exchangeBytes(serverSocketConnection, socketExternal)*/
 
     }
 
@@ -194,22 +250,6 @@ class ProxyService : Service(), CoroutineScope {
                 return
             }
         }
-    }
-
-    /**
-     * Connects to backconnect server via SSL
-     */
-    private fun Socket.sendJson(message: ClientMessage) {
-
-        // Start a connection
-        val writerStream = DataOutputStream(outputStream)
-
-        // Prepare message body, indicating end of string with a special char
-        val body = Gson().toJson(message) + endOfString()
-
-        // Send message to server immediately
-        writerStream.write(body.toByteArray())
-        writerStream.flush()
     }
 
     private fun Socket.sendBytes(bytes: ByteArray) {
@@ -243,8 +283,8 @@ class ProxyService : Service(), CoroutineScope {
 
         // Convert server response to corresponding object type
         return when {
-            response?.contains(ServerMessageType.BACKCONNECT) == true -> response.toObject<Backconnect>()
-            response?.contains(ServerMessageType.PING) == true -> response.toObject<Ping>()
+            response?.contains(ServerMessageType.BACKCONNECT) == true -> response.fromJson<Backconnect>()
+            response?.contains(ServerMessageType.PING) == true -> response.fromJson<Ping>()
             else -> ServerMessageEmpty()
         }
     }
@@ -270,6 +310,7 @@ class ProxyService : Service(), CoroutineScope {
 
     override fun onDestroy() {
         //sockets.forEach { it.close() }
+        testSocketConnection.stopClient()
         lifecycleJob.cancel()
     }
 }
