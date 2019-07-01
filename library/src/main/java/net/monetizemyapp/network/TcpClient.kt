@@ -2,16 +2,15 @@ package net.monetizemyapp.network
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import net.monetizemyapp.toolbox.CoroutineContextPool
-import net.monetizemyapp.toolbox.extentions.logd
-import net.monetizemyapp.toolbox.extentions.loge
-import net.monetizemyapp.toolbox.extentions.sendJson
-import net.monetizemyapp.toolbox.extentions.waitForJson
+import net.monetizemyapp.toolbox.extentions.*
 import java.net.Socket
 import kotlin.coroutines.CoroutineContext
 
 
+@ExperimentalStdlibApi
 class TcpClient(private val socket: Socket, listener: OnSocketResponseListener) : CoroutineScope {
 
     private val lifecycleJob = Job()
@@ -21,11 +20,18 @@ class TcpClient(private val socket: Socket, listener: OnSocketResponseListener) 
     // sends message received notifications
     private var listener: OnSocketResponseListener? = null
     // while this is true, the server will continue running
-    private var run = false
+    var listenToUpdates = true
+        set(value) {
+            field = value
+            if (value) {
+                startListeningUpdates()
+            }
+
+        }
 
     init {
         this.listener = listener
-        run()
+        startListeningUpdates()
     }
 
     /**
@@ -35,35 +41,43 @@ class TcpClient(private val socket: Socket, listener: OnSocketResponseListener) 
      */
     fun sendMessage(message: String) {
         launch {
-            logd(TAG, "Sending: $message")
+            logd(TAG, "Sending message: $message")
             socket.sendJson(message)
         }
+    }
+
+    fun sendMessageSync(message: String) {
+        logd(TAG, "Sending message: $message")
+        socket.sendJson(message)
+    }
+
+    fun sendBytesSync(bytes: ByteArray) {
+        logd(TAG, "Sending bytes sync: ${bytes.contentToString()}")
+        socket.sendBytes(bytes)
     }
 
     /**
      * Close the connection and release the members
      */
-    fun stopClient() {
-        run = false
+    fun stop() {
+        listenToUpdates = false
         lifecycleJob.cancel()
         socket.close()
         listener = null
     }
 
-    private fun run() {
-
-        run = true
-
+    private fun startListeningUpdates() {
         try {
             //in this while the client listens for the messages sent by the server
             launch {
-                while (run) {
-                    logd(TAG, "listening loop started")
+                while (isActive && listenToUpdates) {
+                    //logd(TAG, "listening loop started")
                     val response = socket.waitForJson()
-                    logd(TAG, "server response = $response")
+                    //logd(TAG, "server response = $response")
                     if (response.isNullOrBlank()) {
                         listener?.onError("response is Empty")
                     } else {
+                        logd(TAG, "server response = $response")
                         listener?.onNewMessage(this@TcpClient, response)
                     }
                 }
@@ -73,6 +87,9 @@ class TcpClient(private val socket: Socket, listener: OnSocketResponseListener) 
             loge(TAG, "Error ${e.message}")
         }
     }
+
+    fun waitForBytesSync() = socket.waitForBytes()
+
 
     //Declare the interface. The method onNewMessage(String message) will must be implemented in the Activity
     //class at on AsyncTask doInBackground

@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 
 class ProxyServiceStarter(appContext: Context, workerParams: WorkerParameters) : Worker(appContext, workerParams) {
 
+    @ExperimentalStdlibApi
     override fun doWork(): Result {
 
         applicationContext.startService(Intent(applicationContext, ProxyService::class.java))
