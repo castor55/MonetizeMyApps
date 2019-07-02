@@ -7,9 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import net.monetizemyapp.di.InjectorUtils
-import net.monetizemyapp.network.TcpClient
-import net.monetizemyapp.network.deviceId
-import net.monetizemyapp.network.getSystemInfo
+import net.monetizemyapp.network.*
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.response.IpApiResponse
 import net.monetizemyapp.network.model.step0.Ping
@@ -19,16 +17,13 @@ import net.monetizemyapp.network.model.step1.HelloBody
 import net.monetizemyapp.network.model.step2.Backconnect
 import net.monetizemyapp.network.model.step2.Connect
 import net.monetizemyapp.network.model.step2.ConnectBody
-import net.monetizemyapp.network.toIP
 import net.monetizemyapp.toolbox.CoroutineContextPool
 import net.monetizemyapp.toolbox.extentions.*
 import retrofit2.HttpException
 import retrofit2.Response
-import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.net.InetSocketAddress
-import java.net.Socket
 import java.net.URL
 import java.net.URLConnection
 import java.nio.ByteBuffer
@@ -53,14 +48,14 @@ class ProxyService : Service(), CoroutineScope {
 
     private val locationApi by lazy { InjectorUtils.Api.provideLocationApi() }
 
-    private val mainTcpClient by lazy {
+    private val mainTcpClient: TcpClient by lazy {
         val serverSocket = InjectorUtils.Sockets.provideSSlWebSocketConnection(
             HOST,
             PORT,
             ENABLED_SOCKET_PROTOCOLS
         )
-        TcpClient(serverSocket,
-            object : TcpClient.OnSocketResponseListener {
+        SocketTcpClient(serverSocket).apply {
+            listener = object : TcpClient.OnSocketResponseSimpleListener() {
                 override fun onNewMessage(client: TcpClient, message: String) {
                     logd(TAG, "mainTcpClient onNewMessage, message : $message")
                     val response = message.toObject()
@@ -80,10 +75,11 @@ class ProxyService : Service(), CoroutineScope {
                     }
                 }
 
-                override fun onError(error: String) {
+                override fun onError(client: TcpClient, error: String) {
                     loge(TAG, "mainTcpClient onError : $error")
                 }
-            })
+            }
+        }
     }
 
 
@@ -172,28 +168,25 @@ class ProxyService : Service(), CoroutineScope {
 
     private fun startNewBackconnectSession(backconnect: Backconnect) {
         val socket = InjectorUtils.Sockets.provideSSlWebSocketConnection(HOST, PORT, ENABLED_SOCKET_PROTOCOLS)
-        val newConnectionTcpClient = TcpClient(socket, object : TcpClient.OnSocketResponseListener {
-            override fun onNewMessage(client: TcpClient, message: String) {
-                logd(TAG, "newConnectionTcpClient onNewMessage, message = $message")
-            }
-
-            override fun onError(error: String) {
-                loge(TAG, "newConnectionTcpClient onError : $error")
-            }
-        })
-        newConnectionTcpClient.listenToUpdates = false
+        val newConnectionTcpClient = SocketTcpClient(socket).apply {
+            listenToUpdates = false
+        }
 
         launch {
             serverConnections.add(newConnectionTcpClient)
             val message = Connect(ConnectBody(backconnect.body.token))
             newConnectionTcpClient.sendMessageSync(message.toJson())
+
             logd(TAG, "sendMessageSync: message = ${message.toJson()}")
             val firstBytesResponse = newConnectionTcpClient.waitForBytesSync()
-            logd(TAG, "waitForBytesSync: firstBytesResponse = $firstBytesResponse")
+            logd(TAG, "waitForBytesSync: firstBytesResponse = ${firstBytesResponse.contentToString()}")
+
             newConnectionTcpClient.sendBytesSync(byteArrayOf(5, 0))
             logd(TAG, "sendBytesSync: bytes = ${byteArrayOf(5, 0).contentToString()}")
             val requestBytes = newConnectionTcpClient.waitForBytesSync()
             logd(TAG, "waitForBytesSync: requestBytes = ${requestBytes.contentToString()}")
+            logd(TAG, "waitForBytesSync: requestBytes = ${requestBytes.decodeToString()}")
+
 
             // Parse IP that backconnect is asking us to connect to
             val ipBytes = requestBytes.copyOfRange(4, 8)
@@ -202,10 +195,16 @@ class ProxyService : Service(), CoroutineScope {
             val port = portByte.toInt()
             logd(TAG, "New backconnect credentials: ip = $ip, port = $port\n")
             // todo connect to backconnect device and exchange messages
-            newConnectionTcpClient.listenToUpdates = true
+
+            val address = InetSocketAddress(ip, port)
+            val backConnectSocket = createSocketExternal(address)
+            val backConnectTcpClient = BackConnectTcpClient(backConnectSocket).apply {
+                listenToUpdates = false
+            }
+
+            exchangeBytes(newConnectionTcpClient, backConnectTcpClient, requestBytes)
 
         }
-
     }
 
     private fun startNewSession(backconnect: Backconnect) = launch {
@@ -242,32 +241,37 @@ class ProxyService : Service(), CoroutineScope {
 
     }
 
-    private fun exchangeBytes(socket: Socket, socketExternal: URLConnection) {
-        while (true) {
-            val externalResponseBytes = try {
-                socketExternal.waitForExternalBytes()
-            } catch (e: FileNotFoundException) {
-                ByteArray(0)
-            }
-            // Return bytes, or error, to the client
-            val status = if (externalResponseBytes.isEmpty()) 5 else 0
+    private fun exchangeBytes(newConnectionClient: TcpClient, backConnectClient: TcpClient, recievedData: ByteArray) {
+        launch {
+            while (true) {
+                val externalResponseBytes = try {
+                    backConnectClient.waitForBytesSync()
+                } catch (e: FileNotFoundException) {
+                    ByteArray(0)
+                }
 
-            val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
-            socket.sendBytes(response)
+                logd(TAG, "exchangeBytes : externalResponseBytes = ${externalResponseBytes.decodeToString()} ")
+                // Return bytes, or error, to the client
+                val status = if (externalResponseBytes.isEmpty()) 5 else 0
 
-            if (externalResponseBytes.isNotEmpty()) {
-                socket.sendBytes(externalResponseBytes)
-                val socketBytes = socket.waitForBytes()
-                socketExternal.sendBytes(socketBytes)
-            } else {
-                return
+                val response = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
+                logd(TAG, "exchangeBytes : response = ${response.contentToString()} ")
+                newConnectionClient.sendBytesSync(response)
+
+                /*val backConnectRequestBytes = try {
+                    backConnectClient.waitForBytesSync()
+                } catch (e: FileNotFoundException) {
+                    ByteArray(0)
+                }
+                logd(TAG, "exchangeBytes : backConnectRequestBytes = ${backConnectRequestBytes.decodeToString()} ")*/
+
+                newConnectionClient.sendBytesSync(externalResponseBytes)
+                val socketBytes = newConnectionClient.waitForBytesSync()
+                logd(TAG, "exchangeBytes : socketBytes = ${socketBytes.contentToString()} ")
+                logd(TAG, "exchangeBytes : socketBytes (decoded) = ${socketBytes.decodeToString()} ")
+                //backConnectClient.sendBytesSync(socketBytes)*/
             }
         }
-    }
-
-    private fun URLConnection.sendBytes(bytes: ByteArray) {
-        getOutputStream().write(bytes)
-        getOutputStream().flush()
     }
 
     /**
@@ -275,24 +279,15 @@ class ProxyService : Service(), CoroutineScope {
      * These bytes will be funneled to backconnect server
      */
     private fun createSocketExternal(address: InetSocketAddress): URLConnection {
-        //Socket(Proxy(Proxy.Type.SOCKS,address))
         return URL("http://${address.hostName}:${address.port}").openConnection()
             .apply { connect() }
     }
 
 
-    private fun URLConnection.waitForExternalBytes(): ByteArray {
-
-        val outputStream = ByteArrayOutputStream()
-        val data = ByteArray(4096)
-
-        var length = getInputStream().read(data)
-        while (length > 0) {
-            outputStream.write(data, 0, length)
-            length = getInputStream().read(data)
-        }
-        return outputStream.toByteArray()
-    }
+/*private fun createSocketExternal(address: InetSocketAddress): Socket {
+    val proxyAddress = InetSocketAddress(proxyHost, proxyPort)
+    return Socket(Proxy(Proxy.Type.SOCKS), address)
+}*/
 
 
     override fun onDestroy() {

@@ -7,6 +7,7 @@ import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.base.ServerMessageType
 import net.monetizemyapp.network.model.step0.Ping
 import net.monetizemyapp.network.model.step2.Backconnect
+import kotlin.experimental.and
 
 fun Any?.toJson() = Gson().toJson(this) + endOfString()
 
@@ -21,4 +22,9 @@ fun String?.toObject(): ServerMessage {
 fun endOfString(): String {
     return String(Character.toChars(Integer.parseInt("0000", 16)))
 }
+
+
+
+
+
 
