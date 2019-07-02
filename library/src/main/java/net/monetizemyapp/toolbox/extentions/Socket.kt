@@ -8,13 +8,15 @@ import java.io.InputStream
 import java.net.Socket
 
 @ExperimentalStdlibApi
-fun InputStream.getString(): String {
-    val data = ByteArray(4096)
-    read(data)
-    val result = data.decodeToString()
-    val endOfStringIndex = result.indexOf(endOfString())
-    return result.substring(0, endOfStringIndex)
-}
+fun InputStream.getString(): String =
+    use {
+        val data = ByteArray(4096)
+        read(data)
+        val result = data.decodeToString()
+        val endOfStringIndex = result.indexOf(endOfString())
+        return result.substring(0, endOfStringIndex)
+    }
+
 
 @ExperimentalStdlibApi
 fun Socket.waitForJson(): String? = try {

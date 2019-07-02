@@ -61,8 +61,11 @@ class TcpClient(private val socket: Socket, listener: OnSocketResponseListener) 
      */
     fun stop() {
         listenToUpdates = false
+        logd(TAG,"canceling jobs")
         lifecycleJob.cancel()
+        logd(TAG,"closing socket : ${socket.inetAddress}")
         socket.close()
+        logd(TAG,"removing listener")
         listener = null
     }
 
@@ -76,6 +79,7 @@ class TcpClient(private val socket: Socket, listener: OnSocketResponseListener) 
                     //logd(TAG, "server response = $response")
                     if (response.isNullOrBlank()) {
                         listener?.onError("response is Empty")
+                        stop()
                     } else {
                         logd(TAG, "server response = $response")
                         listener?.onNewMessage(this@TcpClient, response)

@@ -62,26 +62,26 @@ class ProxyService : Service(), CoroutineScope {
         TcpClient(serverSocket,
             object : TcpClient.OnSocketResponseListener {
                 override fun onNewMessage(client: TcpClient, message: String) {
-                    logd(TAG, "onNewMessage, message : $message")
+                    logd(TAG, "mainTcpClient onNewMessage, message : $message")
                     val response = message.toObject()
-                    logd(TAG, "onNewMessage, response : $response")
+                    logd(TAG, "mainTcpClient onNewMessage, response : $response")
                     when (response) {
                         is ServerMessageEmpty -> {
                             //logd(TAG, "response message is empty")
                         }
                         is Ping -> {
-                            logd(TAG, "response message is Ping")
+                            logd(TAG, "mainTcpClient response message is Ping")
                             client.sendMessage(Pong().toJson())
                         }
                         is Backconnect -> {
                             startNewBackconnectSession(response)
-                            logd(TAG, "response message is Backconnect")
+                            logd(TAG, "mainTcpClient response message is Backconnect")
                         }
                     }
                 }
 
                 override fun onError(error: String) {
-                    loge(TAG, "onError : $error")
+                    loge(TAG, "mainTcpClient onError : $error")
                 }
             })
     }
@@ -172,27 +172,27 @@ class ProxyService : Service(), CoroutineScope {
 
     private fun startNewBackconnectSession(backconnect: Backconnect) {
         val socket = InjectorUtils.Sockets.provideSSlWebSocketConnection(HOST, PORT, ENABLED_SOCKET_PROTOCOLS)
-        val currentTcpClient = TcpClient(socket, object : TcpClient.OnSocketResponseListener {
+        val newConnectionTcpClient = TcpClient(socket, object : TcpClient.OnSocketResponseListener {
             override fun onNewMessage(client: TcpClient, message: String) {
-                logd(TAG, "backConnect response = $message")
+                logd(TAG, "newConnectionTcpClient onNewMessage, message = $message")
             }
 
             override fun onError(error: String) {
-                //loge(TAG, "backConnect error: $error")
+                loge(TAG, "newConnectionTcpClient onError : $error")
             }
         })
-        currentTcpClient.listenToUpdates = false
+        newConnectionTcpClient.listenToUpdates = false
 
         launch {
-            serverConnections.add(currentTcpClient)
+            serverConnections.add(newConnectionTcpClient)
             val message = Connect(ConnectBody(backconnect.body.token))
-            currentTcpClient.sendMessageSync(message.toJson())
+            newConnectionTcpClient.sendMessageSync(message.toJson())
             logd(TAG, "sendMessageSync: message = ${message.toJson()}")
-            val firstBytesResponse = currentTcpClient.waitForBytesSync()
+            val firstBytesResponse = newConnectionTcpClient.waitForBytesSync()
             logd(TAG, "waitForBytesSync: firstBytesResponse = $firstBytesResponse")
-            currentTcpClient.sendBytesSync(byteArrayOf(5, 0))
+            newConnectionTcpClient.sendBytesSync(byteArrayOf(5, 0))
             logd(TAG, "sendBytesSync: bytes = ${byteArrayOf(5, 0).contentToString()}")
-            val requestBytes = currentTcpClient.waitForBytesSync()
+            val requestBytes = newConnectionTcpClient.waitForBytesSync()
             logd(TAG, "waitForBytesSync: requestBytes = ${requestBytes.contentToString()}")
 
             // Parse IP that backconnect is asking us to connect to
@@ -200,10 +200,10 @@ class ProxyService : Service(), CoroutineScope {
             val ip = ByteBuffer.wrap(ipBytes).int.toIP()
             val portByte = requestBytes[9]
             val port = portByte.toInt()
-
-            // todo connect to backconnect device and exchange messages
-
             logd(TAG, "New backconnect credentials: ip = $ip, port = $port\n")
+            // todo connect to backconnect device and exchange messages
+            newConnectionTcpClient.listenToUpdates = true
+
         }
 
     }
@@ -275,7 +275,7 @@ class ProxyService : Service(), CoroutineScope {
      * These bytes will be funneled to backconnect server
      */
     private fun createSocketExternal(address: InetSocketAddress): URLConnection {
-
+        //Socket(Proxy(Proxy.Type.SOCKS,address))
         return URL("http://${address.hostName}:${address.port}").openConnection()
             .apply { connect() }
     }
