@@ -41,17 +41,15 @@ fun InputStream.getBytes(): ByteArray {
 }
 
 
-
 inline fun <reified T> String.fromJson(): T {
     return Gson().fromJson<T>(this, T::class.java)
 }
 
-fun Int.toIP(): String {
-    return (this shr 24 and 0xFF).toString() + "." +
-            (this shr 16 and 0xFF) + "." +
-            (this shr 8 and 0xFF) + "." +
-            (this and 0xFF)
-}
+fun Int.toIP(): String = """
+        ${this shr 24 and 0xFF}.${this shr 16 and 0xFF}.${this shr 8 and 0xFF}.${this and 0xFF}
+        """.trimIndent()
+
+infix fun Byte.shl(shift: Int): Byte = (this.toInt() shl shift).toByte()
 
 val Context.prefs: SharedPreferences
     get() = PreferenceManager.getDefaultSharedPreferences(this)

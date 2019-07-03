@@ -1,5 +1,6 @@
 package net.monetizemyapp.di
 
+import net.monetizemyapp.network.SocketTcpClient
 import net.monetizemyapp.network.api.GeolocationService
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -28,9 +29,24 @@ object InjectorUtils {
         fun provideSocketFactory() = webSocketFactory
         fun provideSSlWebSocketConnection(url: String, port: Int, protocols: Array<String>): Socket =
             provideSocketFactory().createSocket(url, port).apply {
-                (this as SSLSocket).enabledProtocols = protocols
+                protocols.takeIf { it.isNotEmpty() }?.let {
+                    (this as SSLSocket).enabledProtocols = protocols
+                }
             }
+    }
 
+    object TcpClient {
+        private const val HOST = "monetizemyapp.net"
+        private const val PORT = 443
+        private val ENABLED_SOCKET_PROTOCOLS = arrayOf("TLSv1.2")
+
+        @ExperimentalStdlibApi
+        fun provideServerTcpClient(): net.monetizemyapp.network.TcpClient = Sockets.provideSSlWebSocketConnection(
+            HOST, PORT,
+            ENABLED_SOCKET_PROTOCOLS
+        ).let {
+            SocketTcpClient(it)
+        }
     }
 
     object Api {
