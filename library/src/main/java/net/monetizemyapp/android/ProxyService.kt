@@ -129,8 +129,8 @@ class ProxyService : Service(), CoroutineScope {
     private fun startNewBackconnectSession(backconnect: Backconnect) {
         launch {
             val newServerConnectionTcpClient = InjectorUtils.TcpClient.provideServerTcpClient()
-
             serverConnections.add(newServerConnectionTcpClient)
+
             val message = Connect(ConnectBody(backconnect.body.token))
             newServerConnectionTcpClient.sendMessageSync(message.toJson())
 
@@ -141,19 +141,19 @@ class ProxyService : Service(), CoroutineScope {
             newServerConnectionTcpClient.sendBytesSync(byteArrayOf(5, 0))
             logd(TAG, "startNewBackconnectSession: sendBytesSync, bytes = ${byteArrayOf(5, 0).contentToString()}")
             val requestBytes = newServerConnectionTcpClient.waitForBytesSync()
-            logd(TAG, "tartNewBackconnectSession: waitForBytesSync, requestBytes = ${requestBytes.contentToString()}")
-            logd(TAG, "tartNewBackconnectSession: waitForBytesSync(decode), requestMessage = ${requestBytes.decodeToString()}")
+            logd(TAG, "startNewBackconnectSession: waitForBytesSync, requestBytes = ${requestBytes.contentToString()}")
+            logd(TAG, "startNewBackconnectSession: waitForBytesSync(decode), requestMessage = ${requestBytes.decodeToString()}")
 
             val (ip, port) = parseSocksConnectionRequest(requestBytes)
 
             logd(TAG, "tartNewBackconnectSession: try to connect to backconnect ip = $ip, port = $port\n")
-            val backConnectSocket = InjectorUtils.Sockets.provideSocketConnection(ip, port)
-            val newBackConnectTcpClient = SocketTcpClient(backConnectSocket)
+            val newBackConnectTcpClient = InjectorUtils.TcpClient.provideNewTcpClient(ip, port)
+            serverConnections.add(newBackConnectTcpClient)
 
             // Return bytes, or error, to the client
             val status = if (requestBytes.isEmpty()) 5 else 0
             val statusResponseToServer = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
-            logd(TAG, "tartNewBackconnectSession: sendBytesSync, statusResponseToServer = ${statusResponseToServer.contentToString()} ")
+            logd(TAG, "startNewBackconnectSession: sendBytesSync, statusResponseToServer = ${statusResponseToServer.contentToString()} ")
             newServerConnectionTcpClient.sendBytesSync(statusResponseToServer)
 
             val serverResponseAfterStatus = newServerConnectionTcpClient.waitForBytesSync()

@@ -12,9 +12,6 @@ import kotlin.coroutines.CoroutineContext
 
 @ExperimentalStdlibApi
 class SocketTcpClient(private val socket: Socket) : TcpClient, CoroutineScope {
-    override fun waitForMessageSync(): String? =
-        socket.waitForStringResponse()
-
 
     private val lifecycleJob = Job()
     override val coroutineContext: CoroutineContext
@@ -100,6 +97,7 @@ class SocketTcpClient(private val socket: Socket) : TcpClient, CoroutineScope {
     }
 
     override fun waitForBytesSync() = socket.waitForBytes()
+    override fun waitForMessageSync(): String? = socket.waitForStringResponse()
 
     companion object {
 
