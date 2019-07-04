@@ -1,6 +1,5 @@
 package net.monetizemyapp.toolbox.extentions
 
-import net.monetizemyapp.network.getBytes
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
@@ -19,10 +18,10 @@ fun InputStream.getString(): String =
 
 
 @ExperimentalStdlibApi
-fun Socket.waitForJson(): String? = try {
+fun Socket.waitForStringResponse(): String? = try {
     DataInputStream(getInputStream()).getString()
 } catch (ex: IOException) {
-    loge("Socket", "waitForJson ${ex.message}")
+    loge("Socket", "waitForStringResponse ${ex.message}")
     null
 }
 
@@ -33,6 +32,14 @@ fun Socket.sendJson(message: String) {
     // Send message to server immediately
     writerStream.write(message.toByteArray())
     writerStream.flush()
+}
+
+fun InputStream.getBytes(): ByteArray {
+
+    val data = ByteArray(4096)
+    val length = read(data).takeIf { it >= 0 } ?: 0
+
+    return data.copyOfRange(0, length)
 }
 
 fun Socket.waitForBytes(): ByteArray = getInputStream().getBytes()

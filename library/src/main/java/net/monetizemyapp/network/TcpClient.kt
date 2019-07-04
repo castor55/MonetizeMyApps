@@ -9,6 +9,7 @@ interface TcpClient {
     fun sendBytesSync(bytes: ByteArray)
     fun stop()
     fun waitForBytesSync(): ByteArray
+    fun waitForMessageSync(): String?
 
     interface OnSocketResponseListener {
         fun onNewMessage(client: TcpClient, message: String)

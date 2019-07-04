@@ -12,21 +12,28 @@ import kotlin.coroutines.CoroutineContext
 
 @ExperimentalStdlibApi
 class SocketTcpClient(private val socket: Socket) : TcpClient, CoroutineScope {
+    override fun waitForMessageSync(): String? =
+        socket.waitForStringResponse()
+
 
     private val lifecycleJob = Job()
     override val coroutineContext: CoroutineContext
         get() = CoroutineContextPool.network + lifecycleJob
 
     // sends message received notifications
-    override  var listener: TcpClient.OnSocketResponseListener? = null
+    override var listener: TcpClient.OnSocketResponseListener? = null
+        set(value) {
+            field = value
+            listenToUpdates = value != null
+
+        }
     // while this is true, the server will continue running
-    override var listenToUpdates = true
+    override var listenToUpdates = false
         set(value) {
             field = value
             if (value) {
                 startListeningUpdates()
             }
-
         }
 
     init {
@@ -74,11 +81,12 @@ class SocketTcpClient(private val socket: Socket) : TcpClient, CoroutineScope {
             launch {
                 while (isActive && listenToUpdates) {
                     //logd(TAG, "listening loop started")
-                    val response = socket.waitForJson()
+                    val response = socket.waitForStringResponse()
                     //logd(TAG, "server response = $response")
                     if (response.isNullOrBlank()) {
                         listener?.onError(this@SocketTcpClient, "response is Empty")
-                        stop()
+                        socket.sendBytes(endOfString().toByteArray())
+                        //stop()
                     } else {
                         logd(TAG, "server response = $response")
                         listener?.onNewMessage(this@SocketTcpClient, response)

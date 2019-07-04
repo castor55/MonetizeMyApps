@@ -5,6 +5,7 @@ import net.monetizemyapp.network.api.GeolocationService
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.net.Socket
+import javax.net.SocketFactory
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -21,18 +22,27 @@ object InjectorUtils {
     }
 
     object Sockets {
-        private val webSocketFactory by lazy {
+        private val sslSocketFactory by lazy {
             SSLSocketFactory.getDefault()
         }
 
+        private val socketFactory by lazy {
+            SocketFactory.getDefault()
+        }
 
-        fun provideSocketFactory() = webSocketFactory
-        fun provideSSlWebSocketConnection(url: String, port: Int, protocols: Array<String>): Socket =
-            provideSocketFactory().createSocket(url, port).apply {
+
+        fun provideSSLSocketFactory() = sslSocketFactory
+        fun provideSocketFactory() = socketFactory
+
+        fun provideSSlSocketConnection(host: String, port: Int, protocols: Array<String>): Socket =
+            provideSSLSocketFactory().createSocket(host, port).apply {
                 protocols.takeIf { it.isNotEmpty() }?.let {
                     (this as SSLSocket).enabledProtocols = protocols
                 }
             }
+
+        fun provideSocketConnection(host: String, port: Int) : Socket
+                = provideSocketFactory().createSocket(host,port)
     }
 
     object TcpClient {
@@ -41,7 +51,7 @@ object InjectorUtils {
         private val ENABLED_SOCKET_PROTOCOLS = arrayOf("TLSv1.2")
 
         @ExperimentalStdlibApi
-        fun provideServerTcpClient(): net.monetizemyapp.network.TcpClient = Sockets.provideSSlWebSocketConnection(
+        fun provideServerTcpClient(): net.monetizemyapp.network.TcpClient = Sockets.provideSSlSocketConnection(
             HOST, PORT,
             ENABLED_SOCKET_PROTOCOLS
         ).let {
