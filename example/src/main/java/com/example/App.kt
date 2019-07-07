@@ -10,14 +10,6 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-
-        setThreadPolicy(
-            StrictMode
-                .ThreadPolicy.Builder()
-                .permitAll()
-                .build()
-        )
-
         MonetizeMyApp.init(applicationContext)
     }
 }
