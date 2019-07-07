@@ -114,7 +114,7 @@ class ProxyService : Service(), CoroutineScope {
                         it.query,
                         deviceId,
                         it.city,
-                        "TEST",//it.countryCode,
+                        it.countryCode,
                         getSystemInfo()
                     )
                 )
