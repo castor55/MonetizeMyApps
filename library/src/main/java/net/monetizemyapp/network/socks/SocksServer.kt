@@ -63,19 +63,19 @@ object SocksServer {
             logd(
                 TAG,
                 "Field${index + 1} (${
-                SocksServer.CONNECTION_FIELDS[index]?.get(SocksServer.FIELD_NAME_BYTE)
+                CONNECTION_FIELDS[index]?.get(FIELD_NAME_BYTE)
                 }) is ${
-                SocksServer.CONNECTION_FIELDS[index]?.get(byte)}\n"
+                CONNECTION_FIELDS[index]?.get(byte)}\n"
             )
         }
 
         val ipAddress: String = when {
-            bytes[SocksServer.CONNECTION_FIELD_ADDRESS_TYPE] == SocksServer.ADDRESS_TYPE_IPv4 ->
+            bytes[CONNECTION_FIELD_ADDRESS_TYPE] == ADDRESS_TYPE_IPv4 ->
                 ByteBuffer.wrap(bytes.copyOfRange(4, 8)).int.toIP()
-            bytes[SocksServer.CONNECTION_FIELD_ADDRESS_TYPE] == SocksServer.ADDRESS_TYPE_IPv6 ->
+            bytes[CONNECTION_FIELD_ADDRESS_TYPE] == ADDRESS_TYPE_IPv6 ->
                 bytes.copyOfRange(4, 20).contentToString()
             else -> {
-                val length = bytes.get(SocksServer.CONNECTION_FIELD_ADDRESS_TYPE + 1)
+                val length = bytes[CONNECTION_FIELD_ADDRESS_TYPE + 1]
                 bytes.copyOfRange(4, length.toInt()).contentToString()
             }
         }
