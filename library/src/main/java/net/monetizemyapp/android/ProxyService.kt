@@ -199,10 +199,15 @@ class ProxyService : Service(), CoroutineScope {
                 }
             }
         }
+
+        if (canceled) {
+            listOf(serverConnectionClient, backConnectClient).forEach {
+                serverConnections.remove(it.apply { stop() })
+            }
+        }
     }
 
     override fun onDestroy() {
-        //sockets.forEach { it.close() }
         serverConnections.forEach {
             it.stop()
         }
