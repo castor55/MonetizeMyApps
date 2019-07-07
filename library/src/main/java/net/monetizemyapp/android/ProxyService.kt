@@ -5,9 +5,13 @@ import android.content.Intent
 import android.os.IBinder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import net.monetizemyapp.di.InjectorUtils
-import net.monetizemyapp.network.*
+import net.monetizemyapp.network.SocketTcpClient
+import net.monetizemyapp.network.TcpClient
+import net.monetizemyapp.network.deviceId
+import net.monetizemyapp.network.getSystemInfo
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.response.IpApiResponse
 import net.monetizemyapp.network.model.step0.Ping
@@ -23,14 +27,7 @@ import net.monetizemyapp.toolbox.extentions.*
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
-import java.net.InetSocketAddress
-import java.net.URL
-import java.net.URLConnection
-import java.nio.ByteBuffer
 import kotlin.coroutines.CoroutineContext
-import kotlin.experimental.and
-import kotlin.experimental.or
-import kotlin.math.abs
 
 @ExperimentalStdlibApi
 class ProxyService : Service(), CoroutineScope {
@@ -64,8 +61,8 @@ class ProxyService : Service(), CoroutineScope {
                                 client.sendMessage(Pong().toJson())
                             }
                             is Backconnect -> {
-                                startNewBackconnectSession(response)
                                 logd(TAG, "mainTcpClient response message is Backconnect")
+                                startNewBackconnectSession(response)
                             }
                         }
                     }
@@ -129,117 +126,80 @@ class ProxyService : Service(), CoroutineScope {
     private fun startNewBackconnectSession(backconnect: Backconnect) {
         launch {
             val newServerConnectionTcpClient = InjectorUtils.TcpClient.provideServerTcpClient()
-
             serverConnections.add(newServerConnectionTcpClient)
+
             val message = Connect(ConnectBody(backconnect.body.token))
             newServerConnectionTcpClient.sendMessageSync(message.toJson())
 
             logd(TAG, "startNewBackconnectSession: sendMessageSync, message = ${message.toJson()}")
             val firstBytesResponse = newServerConnectionTcpClient.waitForBytesSync()
-            logd(TAG, "startNewBackconnectSession: waitForBytesSync, firstBytesResponse = ${firstBytesResponse.contentToString()}")
+            logd(
+                TAG,
+                "startNewBackconnectSession: waitForBytesSync, firstBytesResponse = ${firstBytesResponse.contentToString()}"
+            )
 
             newServerConnectionTcpClient.sendBytesSync(byteArrayOf(5, 0))
             logd(TAG, "startNewBackconnectSession: sendBytesSync, bytes = ${byteArrayOf(5, 0).contentToString()}")
             val requestBytes = newServerConnectionTcpClient.waitForBytesSync()
-            logd(TAG, "tartNewBackconnectSession: waitForBytesSync, requestBytes = ${requestBytes.contentToString()}")
-            logd(TAG, "tartNewBackconnectSession: waitForBytesSync(decode), requestMessage = ${requestBytes.decodeToString()}")
+            logd(TAG, "startNewBackconnectSession: waitForBytesSync, requestBytes = ${requestBytes.contentToString()}")
+            logd(
+                TAG,
+                "startNewBackconnectSession: waitForBytesSync(decode), requestMessage = ${requestBytes.decodeToString()}"
+            )
 
-            val (ip, port) = parseSocksConnectionRequest(requestBytes)
+            val (ip, port) = SocksServer.parseSocksConnectionRequest(requestBytes)
 
-            logd(TAG, "tartNewBackconnectSession: try to connect to backconnect ip = $ip, port = $port\n")
-            val backConnectSocket = InjectorUtils.Sockets.provideSocketConnection(ip, port)
+            logd(TAG, "startNewBackconnectSession: try to connect to backconnect ip = $ip, port = $port\n")
+            val backConnectSocket = InjectorUtils.Sockets.provideSimpleSocketConnection(ip, port)
             val newBackConnectTcpClient = SocketTcpClient(backConnectSocket)
+            serverConnections.add(newBackConnectTcpClient)
 
             // Return bytes, or error, to the client
             val status = if (requestBytes.isEmpty()) 5 else 0
             val statusResponseToServer = byteArrayOf(5, status.toByte(), 0, 0, 0, 0, 0, 0, 0)
-            logd(TAG, "tartNewBackconnectSession: sendBytesSync, statusResponseToServer = ${statusResponseToServer.contentToString()} ")
-            newServerConnectionTcpClient.sendBytesSync(statusResponseToServer)
-
-            val serverResponseAfterStatus = newServerConnectionTcpClient.waitForBytesSync()
-            logd(TAG, "tartNewBackconnectSession: waitForBytesSync, responseAfterStatus = ${serverResponseAfterStatus.contentToString()} ")
-            logd(TAG, "tartNewBackconnectSession: waitForBytesSync, responseAfterStatus = ${serverResponseAfterStatus.decodeToString()} ")
-
-            newBackConnectTcpClient.sendMessageSync(serverResponseAfterStatus.decodeToString())
-
-            exchangeBytes(newServerConnectionTcpClient, newBackConnectTcpClient)
-
-        }
-    }
-
-    private fun parseSocksConnectionRequest(bytes: ByteArray): Pair<String, Int> {
-        logd(TAG, "parseSocksConnectionRequest\n")
-        bytes.forEachIndexed { index, byte ->
             logd(
                 TAG,
-                "Field${index + 1} (${
-                SocksServer.CONNECTION_FIELDS[index]?.get(SocksServer.FIELD_NAME_BYTE)
-                }) is ${
-                SocksServer.CONNECTION_FIELDS[index]?.get(byte)}\n"
+                "startNewBackconnectSession: sendBytesSync, statusResponseToServer = ${statusResponseToServer.contentToString()}"
             )
-        }
 
-        val ipAddress: String = when {
-            bytes[SocksServer.CONNECTION_FIELD_ADDRESS_TYPE] == SocksServer.ADDRESS_TYPE_IPv4 ->
-                ByteBuffer.wrap(bytes.copyOfRange(4, 8)).int.toIP()
-            bytes[SocksServer.CONNECTION_FIELD_ADDRESS_TYPE] == SocksServer.ADDRESS_TYPE_IPv6 ->
-                bytes.copyOfRange(4, 20).contentToString()
-            else -> {
-                val length = bytes.get(SocksServer.CONNECTION_FIELD_ADDRESS_TYPE + 1)
-                bytes.copyOfRange(4, length.toInt()).contentToString()
-            }
+            newServerConnectionTcpClient.sendBytesSync(statusResponseToServer)
+            exchangeBytes(newServerConnectionTcpClient, newBackConnectTcpClient)
         }
-        logd(TAG, "parseSocksConnectionRequest: Request IP Address = $ipAddress\n")
-        val portBytes = bytes.takeLast(2).toByteArray()
-        logd(TAG,"parseSocksConnectionRequest: Port Bytes = ${portBytes.contentToString()}")
-        logd(TAG,"parseSocksConnectionRequest: Port UBytes = ${portBytes.toUByteArray().contentToString()}")
-        val portByte = ((portBytes[0] and 0xff.toByte()) shl 8 or (portBytes[1] and 0xff.toByte()))
-        val port = portByte.toInt()
-        val uPort = portByte.toUByte().toInt()
-        logd(TAG, "parseSocksConnectionRequest: Request portByte = $portByte\n")
-        logd(TAG, "parseSocksConnectionRequest: Request port = $port\n")
-        logd(TAG, "parseSocksConnectionRequest: Request uPort = $uPort\n")
-        return Pair(ipAddress, port.takeIf{ it > 0 } ?: (uPort*2)+abs(port))
-
     }
 
     private fun exchangeBytes(serverConnectionClient: TcpClient, backConnectClient: TcpClient) {
-
+        var canceled = false
         launch {
-            val backConnectResponse = backConnectClient.waitForBytesSync()
-            logd(TAG, "Received message from backconnect: message = $backConnectResponse")
-            logd(TAG, "Received message from backconnect: message (decoded) = ${backConnectResponse.decodeToString()}")
-            if (backConnectResponse.isNotEmpty()) {
-                serverConnectionClient.sendBytesSync(backConnectResponse)
+            while (isActive && !canceled) {
+                val backConnectResponse = backConnectClient.waitForBytesSync()
+                logd(TAG, "Received message from backconnect: message = $backConnectResponse")
+                logd(
+                    TAG,
+                    "Received message from backconnect: message (decoded) = ${backConnectResponse.decodeToString()}"
+                )
+                if (backConnectResponse.isNotEmpty()) {
+                    serverConnectionClient.sendBytesSync(backConnectResponse)
+                } else {
+                    canceled = true
+                }
             }
         }
         launch {
-            val serverConnectionResponse = serverConnectionClient.waitForBytesSync()
-            logd(TAG, "Received message from server: message = $serverConnectionResponse")
-            logd(TAG, "Received message from server: message (decoded) = ${serverConnectionResponse.decodeToString()}")
-            if (serverConnectionResponse.isNotEmpty()) {
-                backConnectClient.sendBytesSync(serverConnectionResponse)
+            while (isActive && !canceled) {
+                val serverConnectionResponse = serverConnectionClient.waitForBytesSync()
+                logd(TAG, "Received message from server: message = $serverConnectionResponse")
+                logd(
+                    TAG,
+                    "Received message from server: message (decoded) = ${serverConnectionResponse.decodeToString()}"
+                )
+                if (serverConnectionResponse.isNotEmpty()) {
+                    backConnectClient.sendBytesSync(serverConnectionResponse)
+                } else {
+                    canceled = true
+                }
             }
         }
     }
-
-    /**
-     * Connects to external server.
-     * These bytes will be funneled to backconnect server
-     */
-    private fun createSocketExternal(address: InetSocketAddress): URLConnection {
-        return URL("http://${address.hostName}:${address.port}").openConnection()
-            .apply {
-                connect()
-            }
-    }
-
-
-/*private fun createSocketExternal(address: InetSocketAddress): Socket {
-    val proxyAddress = InetSocketAddress(proxyHost, proxyPort)
-    return Socket(Proxy(Proxy.Type.SOCKS), address)
-}*/
-
 
     override fun onDestroy() {
         //sockets.forEach { it.close() }

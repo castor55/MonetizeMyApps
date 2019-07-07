@@ -22,6 +22,8 @@ object InjectorUtils {
     }
 
     object Sockets {
+        private val ENABLED_SOCKET_PROTOCOLS = arrayOf("TLSv1.2")
+
         private val sslSocketFactory by lazy {
             SSLSocketFactory.getDefault()
         }
@@ -30,30 +32,28 @@ object InjectorUtils {
             SocketFactory.getDefault()
         }
 
-
+        fun getEnabledProtocols() = ENABLED_SOCKET_PROTOCOLS
         fun provideSSLSocketFactory() = sslSocketFactory
         fun provideSocketFactory() = socketFactory
 
         fun provideSSlSocketConnection(host: String, port: Int, protocols: Array<String>): Socket =
             provideSSLSocketFactory().createSocket(host, port).apply {
                 protocols.takeIf { it.isNotEmpty() }?.let {
-                    (this as SSLSocket).enabledProtocols = protocols
+                    (this as? SSLSocket)?.enabledProtocols = it
                 }
             }
 
-        fun provideSocketConnection(host: String, port: Int) : Socket
-                = provideSocketFactory().createSocket(host,port)
+        fun provideSimpleSocketConnection(host: String, port: Int): Socket =
+            provideSocketFactory().createSocket(host, port)
     }
 
     object TcpClient {
         private const val HOST = "monetizemyapp.net"
         private const val PORT = 443
-        private val ENABLED_SOCKET_PROTOCOLS = arrayOf("TLSv1.2")
 
         @ExperimentalStdlibApi
         fun provideServerTcpClient(): net.monetizemyapp.network.TcpClient = Sockets.provideSSlSocketConnection(
-            HOST, PORT,
-            ENABLED_SOCKET_PROTOCOLS
+            HOST, PORT, Sockets.getEnabledProtocols()
         ).let {
             SocketTcpClient(it)
         }

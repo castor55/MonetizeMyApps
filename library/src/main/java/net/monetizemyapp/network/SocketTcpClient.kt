@@ -84,9 +84,8 @@ class SocketTcpClient(private val socket: Socket) : TcpClient, CoroutineScope {
                     val response = socket.waitForStringResponse()
                     //logd(TAG, "server response = $response")
                     if (response.isNullOrBlank()) {
+                        continue
                         listener?.onError(this@SocketTcpClient, "response is Empty")
-                        socket.sendBytes(endOfString().toByteArray())
-                        //stop()
                     } else {
                         logd(TAG, "server response = $response")
                         listener?.onNewMessage(this@SocketTcpClient, response)
