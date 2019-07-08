@@ -1,6 +1,5 @@
 package net.monetizemyapp.di
 
-import android.net.SSLCertificateSocketFactory
 import net.monetizemyapp.network.SocketTcpClient
 import net.monetizemyapp.network.api.GeolocationService
 import retrofit2.Retrofit
@@ -23,48 +22,41 @@ object InjectorUtils {
     }
 
     object Sockets {
+        private val ENABLED_SOCKET_PROTOCOLS = arrayOf("TLSv1.2")
+
         private val sslSocketFactory by lazy {
             SSLSocketFactory.getDefault()
-            SSLCertificateSocketFactory.getDefault()
         }
 
         private val socketFactory by lazy {
             SocketFactory.getDefault()
         }
 
-
+        fun getEnabledProtocols() = ENABLED_SOCKET_PROTOCOLS
         fun provideSSLSocketFactory() = sslSocketFactory
         fun provideSocketFactory() = socketFactory
 
         fun provideSSlSocketConnection(host: String, port: Int, protocols: Array<String>): Socket =
             provideSSLSocketFactory().createSocket(host, port).apply {
                 protocols.takeIf { it.isNotEmpty() }?.let {
-                    (this as SSLSocket).enabledProtocols = protocols
+                    (this as? SSLSocket)?.enabledProtocols = it
                 }
             }
 
-        fun provideSocketConnection(host: String, port: Int): Socket = provideSocketFactory().createSocket(host, port)
+        fun provideSimpleSocketConnection(host: String, port: Int): Socket =
+            provideSocketFactory().createSocket(host, port)
     }
 
     object TcpClient {
         private const val HOST = "monetizemyapp.net"
         private const val PORT = 443
-        private val ENABLED_SOCKET_PROTOCOLS = arrayOf("TLSv1.2")
 
         @ExperimentalStdlibApi
-        fun provideServerTcpClient(): net.monetizemyapp.network.TcpClient = provideNewSSLTcpClient(HOST, PORT)
-
-        @ExperimentalStdlibApi
-        fun provideNewSSLTcpClient(
-            host: String,
-            port: Int
-        ): net.monetizemyapp.network.TcpClient = SocketTcpClient(Sockets.provideSSlSocketConnection(host, port, ENABLED_SOCKET_PROTOCOLS))
-
-        @ExperimentalStdlibApi
-        fun provideNewTcpClient(
-            host: String,
-            port: Int
-        ): net.monetizemyapp.network.TcpClient = SocketTcpClient(Sockets.provideSocketConnection(host, port))
+        fun provideServerTcpClient(): net.monetizemyapp.network.TcpClient = Sockets.provideSSlSocketConnection(
+            HOST, PORT, Sockets.getEnabledProtocols()
+        ).let {
+            SocketTcpClient(it)
+        }
     }
 
     object Api {

@@ -7,7 +7,6 @@ import android.os.Build
 import android.preference.PreferenceManager
 import com.google.gson.Gson
 import net.monetizemyapp.network.model.step1.SystemInfo
-import java.io.InputStream
 import java.util.*
 
 
@@ -30,7 +29,6 @@ fun getSystemInfo(): SystemInfo {
         architecture = System.getProperty("os.arch")!!
     )
 }
-
 
 
 inline fun <reified T> String.fromJson(): T {
