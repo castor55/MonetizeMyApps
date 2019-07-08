@@ -15,6 +15,7 @@ import net.monetizemyapp.android.PromptActivity
 import net.monetizemyapp.android.ProxyServiceStarter
 import net.monetizemyapp.network.*
 import net.monetizemyapp.toolbox.extentions.logd
+import java.util.concurrent.TimeUnit
 
 object MonetizeMyApp {
 

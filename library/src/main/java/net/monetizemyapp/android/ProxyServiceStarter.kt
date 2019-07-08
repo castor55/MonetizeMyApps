@@ -10,10 +10,11 @@ class ProxyServiceStarter(appContext: Context, workerParams: WorkerParameters) :
     @ExperimentalUnsignedTypes
     @ExperimentalStdlibApi
     override fun doWork(): Result {
-
-        applicationContext.startService(Intent(applicationContext, ProxyService::class.java))
-
-        // Indicate whether the task finished successfully with the Result
-        return Result.success()
+        return try {
+            applicationContext.startService(Intent(applicationContext, ProxyService::class.java))
+            Result.success()
+        } catch (e: IllegalStateException) {
+            Result.failure()
+        }
     }
 }

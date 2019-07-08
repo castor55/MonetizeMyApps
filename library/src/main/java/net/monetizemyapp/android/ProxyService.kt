@@ -86,13 +86,15 @@ class ProxyService : Service(), CoroutineScope {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-
-        startProxy()
-
+        launch {
+            if (!serverConnections.contains(mainTcpClient)) {
+                startProxy()
+            }
+        }
         return START_STICKY
     }
 
-    private fun startProxy() {
+    private suspend fun startProxy() {
 
         logd(TAG, "StartProxy")
 
@@ -102,33 +104,33 @@ class ProxyService : Service(), CoroutineScope {
             throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
         }
 
-        launch {
 
-            val location: Response<IpApiResponse>? = try {
-                locationApi.getLocation()
-            } catch (ex: HttpException) {
-                loge(TAG, "Location request error : ${ex.message}")
-                null
-            } catch (ex: IOException) {
-                loge(TAG, "Location request error : ${ex.message}")
-                null
-            }
+        val location: Response<IpApiResponse>? = try {
+            locationApi.getLocation()
+        } catch (ex: HttpException) {
+            loge(TAG, "Location request error : ${ex.message}")
+            null
+        } catch (ex: IOException) {
+            loge(TAG, "Location request error : ${ex.message}")
+            null
+        }
 
-            location?.takeIf { it.isSuccessful }?.body()?.let {
-                val message = Hello(
-                    HelloBody(
-                        clientKey,
-                        it.query,
-                        deviceId,
-                        it.city,
-                        Properties.TEST_COUNTRY_CODE.takeIf { BuildConfig.DEBUG } ?: it.countryCode,
-                        getSystemInfo()
-                    )
+        location?.takeIf { it.isSuccessful }?.body()?.let {
+            val message = Hello(
+                HelloBody(
+                    clientKey,
+                    it.query,
+                    deviceId,
+                    it.city,
+                    Properties.TEST_COUNTRY_CODE.takeIf { BuildConfig.DEBUG } ?: it.countryCode,
+                    getSystemInfo()
                 )
-                mainTcpClient.sendMessage(message.toJson())
-            }
+            )
+            serverConnections.add(mainTcpClient)
+            mainTcpClient.sendMessage(message.toJson())
         }
     }
+
 
     private fun startNewBackconnectSession(backconnect: Backconnect) {
         launch {
@@ -229,20 +231,20 @@ class ProxyService : Service(), CoroutineScope {
     }
 
     private fun onConnectionLost() {
-        serverConnections.forEach {
-            it.stop()
-        }
-        mainTcpClient.stop()
-        lifecycleJob.cancel()
         stopSelf()
         MonetizeMyApp.scheduleServiceStart()
     }
 
     override fun onDestroy() {
-        serverConnections.forEach {
-            it.stop()
+        stopAllConnections()
+    }
+
+    private fun stopAllConnections() {
+        launch {
+            serverConnections.forEach {
+                it.stop()
+            }
         }
-        mainTcpClient.stop()
         lifecycleJob.cancel()
     }
 }
