@@ -5,9 +5,10 @@ import android.content.Intent
 import android.os.IBinder
 import com.proxyrack.BuildConfig
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.Properties
 import net.monetizemyapp.di.InjectorUtils
 import net.monetizemyapp.network.SocketTcpClient
@@ -30,12 +31,13 @@ import net.monetizemyapp.toolbox.extentions.*
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
+import java.net.SocketException
 import kotlin.coroutines.CoroutineContext
 
 @ExperimentalUnsignedTypes
 @ExperimentalStdlibApi
 class ProxyService : Service(), CoroutineScope {
-    private val lifecycleJob = Job()
+    private val lifecycleJob = SupervisorJob()
     override val coroutineContext: CoroutineContext
         get() = CoroutineContextPool.network + lifecycleJob
 
@@ -73,6 +75,7 @@ class ProxyService : Service(), CoroutineScope {
 
                     override fun onError(client: TcpClient, error: String) {
                         loge(TAG, "mainTcpClient onError : $error")
+                        onConnectionLost()
                     }
                 }
             }
@@ -178,33 +181,43 @@ class ProxyService : Service(), CoroutineScope {
     private fun exchangeBytes(serverConnectionClient: TcpClient, backConnectClient: TcpClient) {
         var canceled = false
         launch {
-            while (isActive && !canceled) {
-                val backConnectResponse = backConnectClient.waitForBytesSync()
-                logd(TAG, "Received message from backconnect: message = $backConnectResponse")
-                logd(
-                    TAG,
-                    "Received message from backconnect: message (decoded) = ${backConnectResponse.decodeToString()}"
-                )
-                if (backConnectResponse.isNotEmpty()) {
-                    serverConnectionClient.sendBytesSync(backConnectResponse)
-                } else {
-                    canceled = true
+            try {
+                while (isActive && !canceled) {
+                    val backConnectResponse = backConnectClient.waitForBytesSync()
+                    logd(TAG, "Received message from backconnect: message = $backConnectResponse")
+                    logd(
+                        TAG,
+                        "Received message from backconnect: message (decoded) = ${backConnectResponse.decodeToString()}"
+                    )
+                    if (backConnectResponse.isNotEmpty()) {
+                        serverConnectionClient.sendBytesSync(backConnectResponse)
+                    } else {
+                        canceled = true
+                    }
                 }
+            } catch (e: SocketException) {
+                e.printStackTrace()
+                loge(TAG, "exchangeBytes Error: ${e.message}")
             }
         }
         launch {
-            while (isActive && !canceled) {
-                val serverConnectionResponse = serverConnectionClient.waitForBytesSync()
-                logd(TAG, "Received message from server: message = $serverConnectionResponse")
-                logd(
-                    TAG,
-                    "Received message from server: message (decoded) = ${serverConnectionResponse.decodeToString()}"
-                )
-                if (serverConnectionResponse.isNotEmpty()) {
-                    backConnectClient.sendBytesSync(serverConnectionResponse)
-                } else {
-                    canceled = true
+            try {
+                while (isActive && !canceled) {
+                    val serverConnectionResponse = serverConnectionClient.waitForBytesSync()
+                    logd(TAG, "Received message from server: message = $serverConnectionResponse")
+                    logd(
+                        TAG,
+                        "Received message from server: message (decoded) = ${serverConnectionResponse.decodeToString()}"
+                    )
+                    if (serverConnectionResponse.isNotEmpty()) {
+                        backConnectClient.sendBytesSync(serverConnectionResponse)
+                    } else {
+                        canceled = true
+                    }
                 }
+            } catch (e: SocketException) {
+                e.printStackTrace()
+                loge(TAG, "exchangeBytes Error: ${e.message}")
             }
         }
 
@@ -213,6 +226,16 @@ class ProxyService : Service(), CoroutineScope {
                 serverConnections.remove(it.apply { stop() })
             }
         }
+    }
+
+    private fun onConnectionLost() {
+        serverConnections.forEach {
+            it.stop()
+        }
+        mainTcpClient.stop()
+        lifecycleJob.cancel()
+        stopSelf()
+        MonetizeMyApp.scheduleServiceStart()
     }
 
     override fun onDestroy() {

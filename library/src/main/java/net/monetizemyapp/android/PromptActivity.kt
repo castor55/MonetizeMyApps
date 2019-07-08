@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_prompt.*
 import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.network.*
+import net.monetizemyapp.toolbox.extentions.gone
 
 class PromptActivity : AppCompatActivity() {
 
@@ -37,7 +38,7 @@ class PromptActivity : AppCompatActivity() {
             ivIcon.setImageDrawable(icon)
         } catch (e: PackageManager.NameNotFoundException) {
             e.printStackTrace()
-            header.visibility = View.GONE
+            header.gone()
         }
     }
 }

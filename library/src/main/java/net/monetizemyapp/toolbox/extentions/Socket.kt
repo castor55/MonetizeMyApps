@@ -18,13 +18,8 @@ fun InputStream.getString(): String =
 
 
 @ExperimentalStdlibApi
-fun Socket.waitForStringResponse(): String? = try {
-    DataInputStream(getInputStream()).getString()
-} catch (ex: IOException) {
-    loge("Socket", "waitForStringResponse ${ex.message}")
-    null
-}
-
+@Throws(IOException::class)
+fun Socket.waitForStringResponse(): String? = DataInputStream(getInputStream()).getString()
 
 fun Socket.sendJson(message: String) {
     // Start a connection

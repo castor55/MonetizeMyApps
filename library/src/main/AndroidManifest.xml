@@ -7,10 +7,14 @@
 
     <application
             android:theme="@style/AppTheme"
-            android:usesCleartextTraffic="true"
-            tools:ignore="GoogleAppIndexingWarning">
-        <activity android:name="net.monetizemyapp.android.PromptActivity"/>
-        <activity android:name="net.monetizemyapp.android.MonetizationSettingsActivity">
+            tools:ignore="GoogleAppIndexingWarning"
+            tools:targetApi="n"
+            android:networkSecurityConfig="@xml/network_security_config">
+
+        <activity android:name="net.monetizemyapp.android.PromptActivity"
+                  android:screenOrientation="portrait"/>
+        <activity android:name="net.monetizemyapp.android.MonetizationSettingsActivity"
+                  android:screenOrientation="portrait">
         </activity>
 
         <service android:name="net.monetizemyapp.android.ProxyService"/>
