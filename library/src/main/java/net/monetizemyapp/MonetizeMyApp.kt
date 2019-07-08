@@ -15,45 +15,41 @@ import net.monetizemyapp.android.PromptActivity
 import net.monetizemyapp.android.ProxyServiceStarter
 import net.monetizemyapp.network.*
 import net.monetizemyapp.toolbox.extentions.logd
-import java.util.concurrent.TimeUnit
 
 object MonetizeMyApp {
 
     @JvmStatic
     fun init(context: Context) {
 
-        val mode = context.prefs.getString(PREFS_KEY_MODE, PREFS_VALUE_MODE_UNSELECTED)
+        val callback = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityPaused(activity: Activity?) {}
+            override fun onActivityResumed(activity: Activity?) {}
+            override fun onActivityStarted(activity: Activity?) {}
+            override fun onActivityDestroyed(activity: Activity?) {}
+            override fun onActivitySaveInstanceState(activity: Activity?, outState: Bundle?) {}
+            override fun onActivityStopped(activity: Activity?) {}
 
-        if (mode == PREFS_VALUE_MODE_UNSELECTED) {
-            val callback = object : Application.ActivityLifecycleCallbacks {
-                override fun onActivityPaused(activity: Activity?) {}
-                override fun onActivityResumed(activity: Activity?) {}
-                override fun onActivityStarted(activity: Activity?) {}
-                override fun onActivityDestroyed(activity: Activity?) {}
-                override fun onActivitySaveInstanceState(activity: Activity?, outState: Bundle?) {}
-                override fun onActivityStopped(activity: Activity?) {}
+            override fun onActivityCreated(activity: Activity?, savedInstanceState: Bundle?) {
+                logd("ActivityLifecycleCallbacks", "onActivityCreated : ${activity?.localClassName}")
 
-                override fun onActivityCreated(activity: Activity?, savedInstanceState: Bundle?) {
-                    logd("ActivityLifecycleCallbacks", "onActivityCreated : ${activity?.localClassName}")
-                    context.prefs.getString(
-                        PREFS_KEY_MODE,
-                        PREFS_VALUE_MODE_UNSELECTED
-                    ).takeIf { it != PREFS_VALUE_MODE_UNSELECTED }?.let {
-                        removeActivityListener(context, this)
-                        return
-                    } ?: activity?.intent?.action?.equals(Intent.ACTION_MAIN)?.takeIf { it }?.let {
-                        startPromptActivity(context, 500L)
+                context.prefs.getString(
+                    PREFS_KEY_MODE,
+                    PREFS_VALUE_MODE_UNSELECTED
+                ).takeIf { it != PREFS_VALUE_MODE_UNSELECTED }?.let { mode ->
+                    if (mode == PREFS_VALUE_MODE_PROXY) {
+                        scheduleServiceStart()
                     }
+                    removeActivityListener(context, this)
+                    return
+                } ?: activity?.intent?.action?.equals(Intent.ACTION_MAIN)?.takeIf { it }?.let {
+                    startPromptActivity(context, 500L)
                 }
             }
-
-            (context.applicationContext as? Application)?.registerActivityLifecycleCallbacks(callback)
-                ?: (context as? Activity)?.application?.registerActivityLifecycleCallbacks(callback)
-                ?: startPromptActivity(context, 3_000L)
-
-        } else if (mode == PREFS_VALUE_MODE_PROXY) {
-            scheduleServiceStart()
         }
+
+        (context.applicationContext as? Application)?.registerActivityLifecycleCallbacks(callback)
+            ?: (context as? Activity)?.application?.registerActivityLifecycleCallbacks(callback)
+            ?: startPromptActivity(context, 3_000L)
     }
 
     private fun removeActivityListener(context: Context, callback: Application.ActivityLifecycleCallbacks) {
