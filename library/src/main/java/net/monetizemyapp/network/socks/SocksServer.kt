@@ -87,10 +87,10 @@ class SocksServer : CoroutineScope {
             try {
                 while (isActive && !canceled) {
                     val backConnectResponse = backConnectClient.waitForBytesSync()
-                    logd(TAG, "Received message from backconnect: message = $backConnectResponse")
+                    logd(TAG, "exchangeBytes Received message from backconnect: message = $backConnectResponse")
                     logd(
                         TAG,
-                        "Received message from backconnect: message (decoded) = ${backConnectResponse.decodeToString()}"
+                        "exchangeBytes Received message from backconnect: message (decoded) = ${backConnectResponse.decodeToString()}"
                     )
                     if (backConnectResponse.isNotEmpty()) {
                         serverConnectionClient.sendBytesSync(backConnectResponse)
@@ -107,10 +107,10 @@ class SocksServer : CoroutineScope {
             try {
                 while (isActive && !canceled) {
                     val serverConnectionResponse = serverConnectionClient.waitForBytesSync()
-                    logd(TAG, "Received message from server: message = $serverConnectionResponse")
+                    logd(TAG, "exchangeBytes Received message from server: message = $serverConnectionResponse")
                     logd(
                         TAG,
-                        "Received message from server: message (decoded) = ${serverConnectionResponse.decodeToString()}"
+                        "exchangeBytes Received message from server: message (decoded) = ${serverConnectionResponse.decodeToString()}"
                     )
                     if (serverConnectionResponse.isNotEmpty()) {
                         backConnectClient.sendBytesSync(serverConnectionResponse)

@@ -28,7 +28,6 @@ import retrofit2.Response
 import java.io.IOException
 import kotlin.coroutines.CoroutineContext
 
-
 @ExperimentalUnsignedTypes
 @ExperimentalStdlibApi
 class ProxyService : Service(), CoroutineScope {
