@@ -25,7 +25,6 @@ class SocksServer : CoroutineScope {
     override val coroutineContext: CoroutineContext
         get() = CoroutineContextPool.network + lifecycleJob
 
-
     val TAG: String = SocksServer::class.java.canonicalName ?: SocksServer::class.java.name
 
     private val serverConnections = mutableListOf<TcpClient>()
@@ -76,6 +75,7 @@ class SocksServer : CoroutineScope {
 
             // Return bytes, or error, to the client
             val status = if (backConnectSocket.isBound && !backConnectSocket.isClosed) 0 else 5
+
             val socksServerResponse =
                 Socks5Message(5.toByte(), status.toByte(), 0, 0, 0, byteArrayOf(0), byteArrayOf(0))
             logd(
@@ -138,10 +138,16 @@ class SocksServer : CoroutineScope {
         }
     }
 
-    fun stopServer() {
+
+    private fun stopAllConnections() {
         serverConnections.forEach {
             it.stop()
         }
+        serverConnections.clear()
+    }
+
+    fun stopServer() {
+        stopAllConnections()
         lifecycleJob.cancel()
     }
 }

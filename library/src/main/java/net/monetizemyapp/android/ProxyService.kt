@@ -3,7 +3,6 @@ package net.monetizemyapp.android
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
-import android.os.NetworkOnMainThreadException
 import com.proxyrack.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -44,7 +43,7 @@ class ProxyService : Service(), CoroutineScope {
     private val locationApi by lazy { InjectorUtils.Api.provideLocationApi() }
     private val socketServer by lazy { SocksServer() }
 
-    private val mainTcpClientDelegate = lazy {
+    private val mainTcpClient by lazy {
         InjectorUtils.TcpClient.provideServerTcpClient()
             .apply {
                 listener = object : TcpClient.OnSocketResponseSimpleListener() {
@@ -75,15 +74,16 @@ class ProxyService : Service(), CoroutineScope {
             }
     }
 
-    private val mainTcpClient by mainTcpClientDelegate
 
     override fun onBind(intent: Intent): IBinder? {
         return null
     }
 
+    private var isConnected = false
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startProxy()
-
+        if (!isConnected) {
+            startProxy()
+        }
 
         return START_STICKY
     }
@@ -122,6 +122,7 @@ class ProxyService : Service(), CoroutineScope {
                 )
 
                 mainTcpClient.sendMessage(message.toJson())
+                isConnected = true
             }
         }
     }
@@ -139,7 +140,7 @@ class ProxyService : Service(), CoroutineScope {
     override fun onDestroy() {
         try {
             stopAllConnections()
-        } catch (e: NetworkOnMainThreadException) {
+        } catch (e: Exception) {
             logd(
                 TAG,
                 "Exception while trying to stop all connection. Probably it tries to stop connection on not initialized TcpClient \n${e.message}"
@@ -148,9 +149,8 @@ class ProxyService : Service(), CoroutineScope {
         super.onDestroy()
     }
 
-
     private fun stopAllConnections() {
-        if (mainTcpClientDelegate.isInitialized()) {
+        if (isConnected) {
             logd(TAG, "stopping main connection")
             mainTcpClient.stop()
         }
