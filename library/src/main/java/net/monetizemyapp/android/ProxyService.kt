@@ -126,14 +126,24 @@ class ProxyService : Service(), CoroutineScope {
         }
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        stopAllConnections()
-        super.onTaskRemoved(rootIntent)
-    }
-
     private fun onConnectionLost() {
         stopSelf()
         MonetizeMyApp.scheduleServiceStart()
+    }
+
+    private fun stopAllConnections() {
+        if (isConnected) {
+            logd(TAG, "stopping main connection")
+            mainTcpClient.stop()
+        }
+        logd(TAG, "stopping server")
+        socketServer.stopServer()
+        lifecycleJob.cancel()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopAllConnections()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -148,13 +158,5 @@ class ProxyService : Service(), CoroutineScope {
         super.onDestroy()
     }
 
-    private fun stopAllConnections() {
-        if (isConnected) {
-            logd(TAG, "stopping main connection")
-            mainTcpClient.stop()
-        }
-        logd(TAG, "stopping server")
-        socketServer.stopServer()
-        lifecycleJob.cancel()
-    }
+
 }
