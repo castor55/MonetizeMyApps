@@ -102,7 +102,8 @@ data class Socks5Message(private val messageBytes: ByteArray, private val mode: 
                 ADDRESS_TYPE_IPv4 ->
                     ByteBuffer.wrap(bytes.copyOfRange(4, 8)).int.toIP()
                 ADDRESS_TYPE_IPv6 ->
-                    bytes.copyOfRange(4, 20).contentToString()
+                    //fixme decode ipv6 address
+                    bytes.copyOfRange(5, bytes.size - 2).contentToString()
                 else -> {
                     bytes.copyOfRange(5, bytes.size - 2).decodeToString()
                 }

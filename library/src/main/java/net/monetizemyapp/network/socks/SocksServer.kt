@@ -29,13 +29,6 @@ class SocksServer : CoroutineScope {
 
     private val serverConnections = mutableListOf<TcpClient>()
 
-    @ExperimentalUnsignedTypes
-    private fun parseSocksConnectionRequest(bytes: ByteArray): Pair<String, Int> {
-        val socksMessage = Socks5Message(bytes, Socks5Message.SocksMessageMode.ClientMessage)
-        logd(TAG, "SOCKS CONNECTION REQUEST: $socksMessage")
-        return Pair(socksMessage.connectionAddress, socksMessage.port)
-    }
-
     fun startNewBackconnectSession(backconnect: Backconnect) {
         launch {
             val newServerConnectionTcpClient = InjectorUtils.TcpClient.provideServerTcpClient()
@@ -138,6 +131,12 @@ class SocksServer : CoroutineScope {
         }
     }
 
+    @ExperimentalUnsignedTypes
+    private fun parseSocksConnectionRequest(bytes: ByteArray): Pair<String, Int> {
+        val socksMessage = Socks5Message(bytes, Socks5Message.SocksMessageMode.ClientMessage)
+        logd(TAG, "SOCKS CONNECTION REQUEST: $socksMessage")
+        return Pair(socksMessage.connectionAddress, socksMessage.port)
+    }
 
     private fun stopAllConnections() {
         serverConnections.forEach {
