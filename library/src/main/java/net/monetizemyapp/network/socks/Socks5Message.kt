@@ -96,7 +96,6 @@ data class Socks5Message(private val messageBytes: ByteArray, private val mode: 
             return bytes[CONNECTION_FIELD_ADDRESS_TYPE]
         }
 
-
     val connectionAddress: String
         get() {
             return when (addressType) {
@@ -119,7 +118,7 @@ data class Socks5Message(private val messageBytes: ByteArray, private val mode: 
         get() {
             return bytes.takeLast(2).toByteArray().let { portBytes ->
                 logd(TAG, "PORT BYTES = ${portBytes.contentToString()}")
-                val portByte = ((portBytes[0] and 0xff.toByte()) shl 8 or (portBytes[1] and 0xff.toByte()))
+                val portByte = (portBytes[0] and 0xff.toByte()) shl 8 or (portBytes[1] and 0xff.toByte())
                 val port = portByte.toInt()
                 val uPort = portByte.toUByte().toInt()
                 logd(TAG, "Request portByte = $portByte\n")

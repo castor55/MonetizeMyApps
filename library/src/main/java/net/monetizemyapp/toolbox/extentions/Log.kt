@@ -10,6 +10,6 @@ fun Any.logd(tag: String = this.javaClass.canonicalName ?: this.javaClass.name, 
 
 fun Any.loge(tag: String = this.javaClass.canonicalName ?: this.javaClass.name, text: String?) {
     if (!BuildConfig.DEBUG) return
-    Log.d(tag, text ?: "")
+    Log.e(tag, text ?: "")
 }
 

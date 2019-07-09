@@ -1,6 +1,9 @@
 package net.monetizemyapp.network
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import net.monetizemyapp.toolbox.CoroutineContextPool
 import net.monetizemyapp.toolbox.extentions.*
 import java.io.IOException
@@ -61,13 +64,17 @@ class SocketTcpClient(private val socket: Socket) : TcpClient, CoroutineScope {
      * Close the connection and release the members
      */
     override fun stop() {
+        logd(TAG, "\t--- STOP ---")
+        logd(TAG, "\tremoving listener")
         listenToUpdates = false
-        logd(TAG, "canceling jobs")
-        lifecycleJob.cancel()
-        logd(TAG, "closing socket : ${socket.inetAddress}")
-        socket.close()
-        logd(TAG, "removing listener")
         listener = null
+        logd(TAG, "\tclosing socket : ${socket.inetAddress}")
+        launch {
+            socket.close()
+        }
+        logd(TAG, "\tcanceling jobs")
+        logd(TAG, "\t------------")
+        lifecycleJob.cancel()
     }
 
     private fun startListeningUpdates() {
@@ -111,10 +118,7 @@ class SocketTcpClient(private val socket: Socket) : TcpClient, CoroutineScope {
     }
 
     companion object {
-
         val TAG = SocketTcpClient::class.java.simpleName
-        /* val SERVER_IP = "192.168.1.8" //server IP address
-         val SERVER_PORT = 1234*/
     }
 
 }
