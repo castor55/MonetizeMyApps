@@ -8,6 +8,7 @@ import kotlin.experimental.and
 import kotlin.experimental.or
 import kotlin.math.abs
 
+@ExperimentalStdlibApi
 @ExperimentalUnsignedTypes
 data class Socks5Message(private val messageBytes: ByteArray, private val mode: SocksMessageMode) {
 
@@ -104,8 +105,7 @@ data class Socks5Message(private val messageBytes: ByteArray, private val mode: 
                 ADDRESS_TYPE_IPv6 ->
                     bytes.copyOfRange(4, 20).contentToString()
                 else -> {
-                    val length = bytes[CONNECTION_FIELD_ADDRESS_TYPE + 1]
-                    bytes.copyOfRange(4, length.toInt()).contentToString()
+                    bytes.copyOfRange(5, bytes.size - 2).decodeToString()
                 }
             }
         }
