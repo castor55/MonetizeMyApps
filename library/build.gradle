@@ -44,7 +44,6 @@ dependencies {
     //work manager
     implementation "androidx.work:work-runtime-ktx:2.0.1"
 
-
     // utils
     implementation 'com.airbnb.android:paris:1.2.1'
 }

@@ -12,11 +12,13 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import net.monetizemyapp.android.MonetizationSettingsActivity
 import net.monetizemyapp.android.PromptActivity
-import net.monetizemyapp.android.ProxyServiceStarter
+import net.monetizemyapp.android.ProxyServiceWorker
 import net.monetizemyapp.network.*
 import net.monetizemyapp.toolbox.extentions.logd
 
 object MonetizeMyApp {
+
+    val TAG: String = MonetizeMyApp::class.java.name
 
     @JvmStatic
     fun init(context: Context) {
@@ -81,13 +83,13 @@ object MonetizeMyApp {
     }
 
     fun scheduleServiceStart() {
-
+        logd(Properties.APP_TAG, "scheduleServiceStart")
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .setRequiredNetworkType(NetworkType.UNMETERED)
             .build()
 
-        val uploadWorkRequest = OneTimeWorkRequestBuilder<ProxyServiceStarter>()
+        val uploadWorkRequest = OneTimeWorkRequestBuilder<ProxyServiceWorker>()
             .setConstraints(constraints)
             .build()
 

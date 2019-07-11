@@ -1,11 +1,13 @@
 package net.monetizemyapp.android
 
-import android.app.Service
-import android.content.Intent
-import android.os.IBinder
+import android.content.Context
+import android.os.Environment
+import androidx.work.CoroutineWorker
+import androidx.work.WorkerParameters
 import com.proxyrack.BuildConfig
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.Properties
@@ -25,24 +27,47 @@ import net.monetizemyapp.toolbox.CoroutineContextPool
 import net.monetizemyapp.toolbox.extentions.*
 import retrofit2.HttpException
 import retrofit2.Response
+import java.io.BufferedWriter
+import java.io.File
+import java.io.FileWriter
 import java.io.IOException
-import kotlin.coroutines.CoroutineContext
+import java.text.SimpleDateFormat
 
-@ExperimentalUnsignedTypes
-@ExperimentalStdlibApi
-class ProxyService : Service(), CoroutineScope {
 
-    private val lifecycleJob = SupervisorJob()
-    override val coroutineContext: CoroutineContext
-        get() = CoroutineContextPool.network + lifecycleJob
+/*class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) : Worker(appContext, workerParams) {
+
+    @ExperimentalUnsignedTypes
+    @ExperimentalStdlibApi
+    override fun doWork(): Result {
+        return try {
+            logd(Properties.APP_TAG, "ProxyServiceWorker: trying to start ProxyService")
+            applicationContext.startService(Intent(applicationContext, ProxyService::class.java))
+            Result.success()
+        } catch (e: IllegalStateException) {
+            logd(Properties.APP_TAG, "ProxyServiceWorker: Start ProxyService failed")
+            Result.failure()
+        }
+    }
+}*/
+class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
+    CoroutineWorker(appContext, workerParams), CoroutineScope {
 
     companion object {
-        private val TAG: String = ProxyService::class.java.canonicalName ?: ProxyService::class.java.name
+        val TAG: String = ProxyServiceWorker::class.java.name
     }
 
+    override val coroutineContext: CoroutineDispatcher
+        get() = CoroutineContextPool.default
+
     private val locationApi by lazy { InjectorUtils.Api.provideLocationApi() }
+    @ExperimentalUnsignedTypes
+    @ExperimentalStdlibApi
     private val socketServer by lazy { SocksServer() }
 
+    private var isConnected = false
+
+    @ExperimentalUnsignedTypes
+    @ExperimentalStdlibApi
     private val mainTcpClient by lazy {
         InjectorUtils.TcpClient.provideServerTcpClient()
             .apply {
@@ -74,26 +99,28 @@ class ProxyService : Service(), CoroutineScope {
             }
     }
 
+    private val sdf by lazy { SimpleDateFormat("hh:MM:ss") }
 
-    override fun onBind(intent: Intent): IBinder? {
-        return null
-    }
+    @ExperimentalUnsignedTypes
+    @ExperimentalStdlibApi
+    override suspend fun doWork(): Result {
+        startProxy()
 
-    private var isConnected = false
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        logd(TAG, "onStartCommand")
-        if (!isConnected) {
-            startProxy()
+        while (!isStopped) {
+            appendLog("${sdf.format(System.currentTimeMillis())} Still Alive")
+            delay(1_000 * 60 * 5)
         }
-
-        return START_STICKY_COMPATIBILITY
+        return Result.success()
     }
 
+
+    @ExperimentalUnsignedTypes
+    @ExperimentalStdlibApi
     private fun startProxy() {
 
         logd(TAG, "StartProxy")
 
-        val clientKey = getAppInfo()?.metaData?.getString("monetize_app_key")
+        val clientKey = applicationContext.getAppInfo()?.metaData?.getString("monetize_app_key")
 
         if (clientKey.isNullOrBlank()) {
             throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
@@ -129,37 +156,33 @@ class ProxyService : Service(), CoroutineScope {
     }
 
     private fun onConnectionLost() {
-        stopSelf()
         MonetizeMyApp.scheduleServiceStart()
     }
 
-    private fun stopAllConnections() {
-        if (isConnected) {
-            logd(TAG, "stopping main connection")
-            mainTcpClient.stop()
+    fun appendLog(text: String) {
+        if (Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED) {
+            val filename: String = applicationContext.externalCacheDir.absolutePath + "/logs"
+            val logFile = File(filename)
+            if (!logFile.exists()) {
+                try {
+                    logFile.createNewFile()
+                } catch (e: IOException) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace()
+                }
+
+            }
+            try {
+                //BufferedWriter for performance, true to set append to file flag
+                val buf = BufferedWriter(FileWriter(logFile, true))
+                buf.append(text)
+                buf.newLine()
+                buf.close()
+            } catch (e: IOException) {
+                // TODO Auto-generated catch block
+                e.printStackTrace()
+            }
         }
-        logd(TAG, "stopping server")
-        socketServer.stopServer()
-        lifecycleJob.cancel()
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        stopAllConnections()
-        MonetizeMyApp.scheduleServiceStart()
-        logd(TAG, "onTaskRemoved")
-        super.onTaskRemoved(rootIntent)
-    }
-
-    override fun onDestroy() {
-        try {
-            stopAllConnections()
-        } catch (e: Exception) {
-            logd(
-                TAG,
-                "Exception while trying to stop all connection. Probably it tries to stop connection on not initialized TcpClient \n${e.message}"
-            )
-        }
-        MonetizeMyApp.scheduleServiceStart()
-        super.onDestroy()
-    }
 }

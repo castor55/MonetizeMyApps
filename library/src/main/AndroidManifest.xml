@@ -17,13 +17,16 @@
                   android:screenOrientation="portrait">
         </activity>
 
-        <service android:name="net.monetizemyapp.android.ProxyService"/>
+        <service android:name="net.monetizemyapp.android.ProxyService"
+                 android:stopWithTask="false"/>
+        <!-- android:process=":ProxyService"/>-->
 
         <receiver android:name="net.monetizemyapp.android.BootReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
             </intent-filter>
         </receiver>
+
     </application>
 
 </manifest>
