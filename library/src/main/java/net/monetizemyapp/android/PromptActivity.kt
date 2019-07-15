@@ -20,7 +20,7 @@ class PromptActivity : AppCompatActivity() {
         btnAgree.setOnClickListener {
             prefs.edit().putString(PREFS_KEY_MODE, PREFS_VALUE_MODE_PROXY).apply()
 
-            MonetizeMyApp.scheduleServiceStart()
+            MonetizeMyApp.scheduleServiceStart(this)
             finish()
         }
         btnDisagree.setOnClickListener {

@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import net.monetizemyapp.MonetizeMyApp
 
-class BootReceiver : BroadcastReceiver() {
+class SystemEventsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
 

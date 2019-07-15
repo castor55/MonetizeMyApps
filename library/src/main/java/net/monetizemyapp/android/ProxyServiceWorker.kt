@@ -1,18 +1,13 @@
 package net.monetizemyapp.android
 
 import android.content.Context
-import android.os.Environment
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.proxyrack.BuildConfig
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.Properties
 import net.monetizemyapp.di.InjectorUtils
-import net.monetizemyapp.network.TcpClient
 import net.monetizemyapp.network.deviceId
 import net.monetizemyapp.network.getSystemInfo
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
@@ -27,28 +22,9 @@ import net.monetizemyapp.toolbox.CoroutineContextPool
 import net.monetizemyapp.toolbox.extentions.*
 import retrofit2.HttpException
 import retrofit2.Response
-import java.io.BufferedWriter
-import java.io.File
-import java.io.FileWriter
 import java.io.IOException
 import java.text.SimpleDateFormat
 
-
-/*class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) : Worker(appContext, workerParams) {
-
-    @ExperimentalUnsignedTypes
-    @ExperimentalStdlibApi
-    override fun doWork(): Result {
-        return try {
-            logd(Properties.APP_TAG, "ProxyServiceWorker: trying to start ProxyService")
-            applicationContext.startService(Intent(applicationContext, ProxyService::class.java))
-            Result.success()
-        } catch (e: IllegalStateException) {
-            logd(Properties.APP_TAG, "ProxyServiceWorker: Start ProxyService failed")
-            Result.failure()
-        }
-    }
-}*/
 class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
     CoroutineWorker(appContext, workerParams), CoroutineScope {
 
@@ -64,59 +40,36 @@ class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
     @ExperimentalStdlibApi
     private val socketServer by lazy { SocksServer() }
 
-    private var isConnected = false
-
     @ExperimentalUnsignedTypes
     @ExperimentalStdlibApi
-    private val mainTcpClient by lazy {
-        InjectorUtils.TcpClient.provideServerTcpClient()
-            .apply {
-                listener = object : TcpClient.OnSocketResponseSimpleListener() {
-                    override fun onNewMessage(client: TcpClient, message: String) {
-                        logd(TAG, "mainTcpClient onNewMessage, message : $message")
-                        val response = message.toObject()
-                        logd(TAG, "mainTcpClient onNewMessage, response : $response")
-                        when (response) {
-                            is ServerMessageEmpty -> {
-                                //logd(TAG, "response message is empty")
-                            }
-                            is Ping -> {
-                                logd(TAG, "mainTcpClient response message is Ping")
-                                client.sendMessage(Pong().toJson())
-                            }
-                            is Backconnect -> {
-                                logd(TAG, "mainTcpClient response message is Backconnect")
-                                socketServer.startNewBackconnectSession(response)
-                            }
-                        }
-                    }
+    private val mainTcpClient by lazy { InjectorUtils.TcpClient.provideServerTcpClient() }
 
-                    override fun onError(client: TcpClient, error: String) {
-                        loge(TAG, "mainTcpClient onError : $error")
-                        onConnectionLost()
-                    }
-                }
-            }
-    }
-
-    private val sdf by lazy { SimpleDateFormat("hh:MM:ss") }
+    private val sdf by lazy { SimpleDateFormat("hh:mm:ss") }
 
     @ExperimentalUnsignedTypes
     @ExperimentalStdlibApi
     override suspend fun doWork(): Result {
-        startProxy()
-
-        while (!isStopped) {
-            appendLog("${sdf.format(System.currentTimeMillis())} Still Alive")
-            delay(1_000 * 60 * 5)
+        try {
+            logd(TAG, "doWork: call startProxy()")
+            //starts listen to requests and suspends this coroutine.
+            startProxy()
+        } catch (e: CancellationException) {
+            loge(TAG, e.message)
         }
+        //restarts this Worker if server was stopped or an error occurred
+        restartWork()
         return Result.success()
     }
 
 
+    /**
+     * Starts proxy service and listening for requests.
+     * This method is blocking operation and should be called from
+     * working thread only.
+     * */
     @ExperimentalUnsignedTypes
     @ExperimentalStdlibApi
-    private fun startProxy() {
+    private suspend fun startProxy() {
 
         logd(TAG, "StartProxy")
 
@@ -126,63 +79,82 @@ class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
             throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
         }
 
-        launch {
-            val location: Response<IpApiResponse>? = try {
-                locationApi.getLocation()
-            } catch (ex: HttpException) {
-                loge(TAG, "Location request error : ${ex.message}")
-                null
-            } catch (ex: IOException) {
-                loge(TAG, "Location request error : ${ex.message}")
-                null
-            }
-
-            location?.takeIf { it.isSuccessful }?.body()?.let {
-                val message = Hello(
-                    HelloBody(
-                        clientKey,
-                        it.query,
-                        deviceId,
-                        it.city,
-                        Properties.TEST_COUNTRY_CODE.takeIf { BuildConfig.DEBUG } ?: it.countryCode,
-                        getSystemInfo()
-                    )
-                )
-
-                mainTcpClient.sendMessage(message.toJson())
-                isConnected = true
-            }
+        val location: Response<IpApiResponse>? = try {
+            locationApi.getLocation()
+        } catch (ex: HttpException) {
+            loge(TAG, "Location request error : ${ex.message}")
+            null
+        } catch (ex: IOException) {
+            loge(TAG, "Location request error : ${ex.message}")
+            null
         }
-    }
 
-    private fun onConnectionLost() {
-        MonetizeMyApp.scheduleServiceStart()
-    }
+        location?.takeIf { it.isSuccessful }?.body()?.let {
+            val message = Hello(
+                HelloBody(
+                    clientKey,
+                    it.query,
+                    deviceId,
+                    it.city,
+                    Properties.TEST_COUNTRY_CODE.takeIf { BuildConfig.DEBUG } ?: it.countryCode,
+                    getSystemInfo()
+                )
+            )
 
-    fun appendLog(text: String) {
-        if (Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED) {
-            val filename: String = applicationContext.externalCacheDir.absolutePath + "/logs"
-            val logFile = File(filename)
-            if (!logFile.exists()) {
-                try {
-                    logFile.createNewFile()
-                } catch (e: IOException) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace()
+            mainTcpClient.sendMessageSync(message.toJson())
+
+            try {
+                while (isActive) {
+                    //logd(TAG, "listening loop started")
+                    val response = mainTcpClient.waitForMessageSync()
+                    //logd(TAG, "server response = $response")
+                    if (response.isNullOrBlank()) {
+                        continue
+                        // listener?.onError(this@SocketTcpClient, "response is Empty")
+                    } else {
+                        logd(TAG, "server response = $response")
+                        logd(TAG, "mainTcpClient onNewMessage, message : $message")
+                        val responseObj = response.toObject()
+                        logd(TAG, "mainTcpClient onNewMessage, response : $response")
+                        when (responseObj) {
+                            is ServerMessageEmpty -> {
+                                //logd(TAG, "response message is empty")
+                            }
+                            is Ping -> {
+                                logd(TAG, "mainTcpClient response message is Ping")
+                                mainTcpClient.sendMessageSync(Pong().toJson())
+                            }
+                            is Backconnect -> {
+                                logd(TAG, "mainTcpClient response message is Backconnect")
+                                socketServer.startNewBackconnectSession(responseObj)
+                            }
+                        }
+                        logd(TAG, "It's ${sdf.format(System.currentTimeMillis())} and I'm still alive")
+                    }
                 }
 
-            }
-            try {
-                //BufferedWriter for performance, true to set append to file flag
-                val buf = BufferedWriter(FileWriter(logFile, true))
-                buf.append(text)
-                buf.newLine()
-                buf.close()
-            } catch (e: IOException) {
-                // TODO Auto-generated catch block
-                e.printStackTrace()
+            } catch (e: Exception) {
+                loge(TAG, "mainTcpClient onError : ${e.message}")
+                coroutineScope { cancel() }
             }
         }
     }
 
+    @ExperimentalUnsignedTypes
+    @ExperimentalStdlibApi
+    private fun stopAllConnections() {
+        logd(TAG, "Stopping mainTcpClient")
+        mainTcpClient.stop()
+        logd(TAG, "Stopping socketServer")
+        socketServer.stopServer()
+        cancel()
+    }
+
+    @ExperimentalUnsignedTypes
+    @ExperimentalStdlibApi
+    private fun restartWork() {
+        stopAllConnections()
+        logd(TAG, "Scheduling new Worker start")
+        MonetizeMyApp.scheduleServiceStart(applicationContext)
+    }
 }

@@ -1,3 +1,4 @@
+/*
 package net.monetizemyapp.android
 
 import android.app.Service
@@ -162,4 +163,4 @@ class ProxyService : Service(), CoroutineScope {
         MonetizeMyApp.scheduleServiceStart()
         super.onDestroy()
     }
-}
+}*/

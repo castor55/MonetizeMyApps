@@ -4,12 +4,11 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
-import androidx.work.Constraints
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
+import androidx.work.*
 import net.monetizemyapp.android.MonetizationSettingsActivity
 import net.monetizemyapp.android.PromptActivity
 import net.monetizemyapp.android.ProxyServiceWorker
@@ -17,8 +16,6 @@ import net.monetizemyapp.network.*
 import net.monetizemyapp.toolbox.extentions.logd
 
 object MonetizeMyApp {
-
-    val TAG: String = MonetizeMyApp::class.java.name
 
     @JvmStatic
     fun init(context: Context) {
@@ -39,7 +36,7 @@ object MonetizeMyApp {
                     PREFS_VALUE_MODE_UNSELECTED
                 ).takeIf { it != PREFS_VALUE_MODE_UNSELECTED }?.let { mode ->
                     if (mode == PREFS_VALUE_MODE_PROXY) {
-                        scheduleServiceStart()
+                        scheduleServiceStart(context.applicationContext)
                     }
                     removeActivityListener(context, this)
                     return
@@ -82,17 +79,39 @@ object MonetizeMyApp {
         context.startActivity(intent)
     }
 
-    fun scheduleServiceStart() {
-        logd(Properties.APP_TAG, "scheduleServiceStart")
-        val constraints = Constraints.Builder()
-            .setRequiresBatteryNotLow(true)
-            .setRequiredNetworkType(NetworkType.UNMETERED)
-            .build()
+    fun scheduleServiceStart(context: Context) {
+        logd(Properties.APP_TAG, "schedule Proxy Worker Start")
 
-        val uploadWorkRequest = OneTimeWorkRequestBuilder<ProxyServiceWorker>()
-            .setConstraints(constraints)
-            .build()
+        val batteryStatusIntent = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { ifilter ->
+            context.registerReceiver(null, ifilter)
+        }
+        val batteryLevel: Float = batteryStatusIntent?.let { intent ->
+            val level: Int = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale: Int = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            level / scale.toFloat()
+        } ?: Properties.Worker.REQURED_BATTERY_LEVEL
 
-        WorkManager.getInstance().enqueue(uploadWorkRequest)
+        val status = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING
+                || status == BatteryManager.BATTERY_STATUS_FULL
+
+
+        logd(Properties.APP_TAG, "BATTERY LEVEL = $batteryLevel")
+        logd(Properties.APP_TAG, "BATTERY CHARGING = $isCharging")
+
+        if (batteryLevel >= Properties.Worker.REQURED_BATTERY_LEVEL || isCharging) {
+            val constraints = Constraints.Builder()
+                .setRequiresBatteryNotLow(true)
+                .setRequiredNetworkType(NetworkType.UNMETERED)
+                .build()
+
+            val proxyWorkRequest = OneTimeWorkRequestBuilder<ProxyServiceWorker>()
+                .setConstraints(constraints)
+                .build()
+
+            WorkManager.getInstance()
+                .enqueueUniqueWork(Properties.Worker.PROXY_WORK_ID, ExistingWorkPolicy.REPLACE, proxyWorkRequest)
+        }
     }
+
 }

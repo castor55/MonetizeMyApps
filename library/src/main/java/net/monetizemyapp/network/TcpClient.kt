@@ -1,10 +1,7 @@
 package net.monetizemyapp.network
 
 interface TcpClient {
-    var listenToUpdates: Boolean
-    var listener: OnSocketResponseListener?
 
-    fun sendMessage(message: String)
     fun sendMessageSync(message: String)
     fun sendBytesSync(bytes: ByteArray)
     fun stop()
