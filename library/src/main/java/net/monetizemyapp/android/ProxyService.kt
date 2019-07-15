@@ -88,7 +88,9 @@ class ProxyService : Service(), CoroutineScope {
         }
 
         return START_STICKY_COMPATIBILITY
-    }
+    }*/
+/**//*
+
 
     private fun startProxy() {
 
@@ -163,4 +165,5 @@ class ProxyService : Service(), CoroutineScope {
         MonetizeMyApp.scheduleServiceStart()
         super.onDestroy()
     }
-}*/
+}
+*/

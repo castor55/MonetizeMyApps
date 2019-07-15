@@ -147,6 +147,8 @@ class SocksServer : CoroutineScope {
 
     fun stopServer() {
         stopAllConnections()
-        lifecycleJob.cancel()
+        if (lifecycleJob.isActive) {
+            lifecycleJob.cancel()
+        }
     }
 }

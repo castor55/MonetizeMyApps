@@ -5,8 +5,10 @@ object Properties {
 
     const val APP_TAG: String = "MonetizeMyApp"
 
+
     object Worker {
         const val PROXY_WORK_ID: String = "proxy_work_01"
-        const val REQURED_BATTERY_LEVEL: Float = 0.5f
+        const val PROXY_RESTART_WORK_ID: String = "proxy_restart_work_01"
+        const val REQURED_BATTERY_LEVEL: Float = 0.4f
     }
 }

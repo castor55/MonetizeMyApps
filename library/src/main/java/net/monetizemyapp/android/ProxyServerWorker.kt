@@ -1,6 +1,8 @@
 package net.monetizemyapp.android
 
 import android.content.Context
+import android.os.PowerManager
+import android.widget.Toast
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.proxyrack.BuildConfig
@@ -25,11 +27,11 @@ import retrofit2.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 
-class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
+class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
     CoroutineWorker(appContext, workerParams), CoroutineScope {
 
     companion object {
-        val TAG: String = ProxyServiceWorker::class.java.name
+        val TAG: String = ProxyServerWorker::class.java.name
     }
 
     override val coroutineContext: CoroutineDispatcher
@@ -44,20 +46,46 @@ class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
     @ExperimentalStdlibApi
     private val mainTcpClient by lazy { InjectorUtils.TcpClient.provideServerTcpClient() }
 
-    private val sdf by lazy { SimpleDateFormat("hh:mm:ss") }
+    private val sdf by lazy { SimpleDateFormat("HH:mm:ss") }
+
+    private val wakeLock: PowerManager.WakeLock by lazy {
+        (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+            val appName = applicationContext.getApplicationName()
+            val wakeLockTag = "$appName::ProxyWakeLock"
+            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, wakeLockTag)
+        }
+    }
 
     @ExperimentalUnsignedTypes
     @ExperimentalStdlibApi
     override suspend fun doWork(): Result {
-        try {
-            logd(TAG, "doWork: call startProxy()")
-            //starts listen to requests and suspends this coroutine.
-            startProxy()
-        } catch (e: CancellationException) {
-            loge(TAG, e.message)
+        appendLogToFile("${sdf.format(System.currentTimeMillis())} Start new Work")
+        withContext(CoroutineContextPool.ui) {
+            Toast.makeText(applicationContext, "ProxyServerWorker.doWork", Toast.LENGTH_LONG).show()
         }
-        //restarts this Worker if server was stopped or an error occurred
-        restartWork()
+        val batteryInfo = applicationContext.getBatteryInfo()
+        appendLogToFile("${sdf.format(System.currentTimeMillis())} doWork: Battery Info = $batteryInfo")
+        if (batteryInfo.isCharging || batteryInfo.level >= Properties.Worker.REQURED_BATTERY_LEVEL) {
+
+            wakeLock.acquire(15 * 60 * 1_000 /*1s*/)
+
+            withContext(CoroutineContextPool.network) {
+                try {
+                    logd(TAG, "doWork: call startProxy()")
+                    appendLogToFile("${sdf.format(System.currentTimeMillis())} doWork: call startProxy()")
+                    //starts listen to requests and suspends this coroutine.
+                    startProxy()
+                } catch (e: CancellationException) {
+                    loge(TAG, e.message)
+                }
+            }
+            appendLogToFile("${sdf.format(System.currentTimeMillis())}\tstopping the work ")
+            appendLogToFile("${sdf.format(System.currentTimeMillis())}\treleasing WakeLock ")
+            logd(TAG, "releasing WakeLock")
+            wakeLock.release()
+            //restarts this Worker if server was stopped or an error occurred
+            restartWork()
+        }
         return Result.success()
     }
 
@@ -112,10 +140,9 @@ class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
                         continue
                         // listener?.onError(this@SocketTcpClient, "response is Empty")
                     } else {
-                        logd(TAG, "server response = $response")
-                        logd(TAG, "mainTcpClient onNewMessage, message : $message")
+                        logd(TAG, "mainTcpClient server response = $response")
                         val responseObj = response.toObject()
-                        logd(TAG, "mainTcpClient onNewMessage, response : $response")
+                        logd(TAG, "mainTcpClient onNewMessage, responseObj : $responseObj")
                         when (responseObj) {
                             is ServerMessageEmpty -> {
                                 //logd(TAG, "response message is empty")
@@ -130,6 +157,7 @@ class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
                             }
                         }
                         logd(TAG, "It's ${sdf.format(System.currentTimeMillis())} and I'm still alive")
+                        appendLogToFile("${sdf.format(System.currentTimeMillis())}\t I'm still alive ")
                     }
                 }
 
@@ -147,7 +175,9 @@ class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
         mainTcpClient.stop()
         logd(TAG, "Stopping socketServer")
         socketServer.stopServer()
-        cancel()
+        if (coroutineContext.isActive) {
+            coroutineContext.cancel()
+        }
     }
 
     @ExperimentalUnsignedTypes
@@ -155,6 +185,7 @@ class ProxyServiceWorker(appContext: Context, workerParams: WorkerParameters) :
     private fun restartWork() {
         stopAllConnections()
         logd(TAG, "Scheduling new Worker start")
-        MonetizeMyApp.scheduleServiceStart(applicationContext)
+        appendLogToFile("${sdf.format(System.currentTimeMillis())}\t Scheduling new Worker start")
+        MonetizeMyApp.scheduleServiceStart(MonetizeMyApp.StartMode.SingeLaunch)
     }
 }
