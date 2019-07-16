@@ -26,7 +26,7 @@ fun Context?.getBatteryInfo(): BatteryInfo =
             val level: Int = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale: Int = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
             level / scale.toFloat()
-        } ?: Properties.Worker.REQURED_BATTERY_LEVEL
+        } ?: Properties.Worker.REQUIRED_BATTERY_LEVEL
 
         val status = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
         val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING

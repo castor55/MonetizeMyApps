@@ -20,6 +20,7 @@ fun Any.loge(tag: String = this.javaClass.canonicalName ?: this.javaClass.name, 
 }
 
 fun appendLogToFile(text: String) {
+    if (!BuildConfig.DEBUG) return
     val appDirectory = File(Environment.getExternalStorageDirectory().path + "/MonetizeMyApp")
     val logFileName = "Proxy_logs"
     val logFile = File(appDirectory, "/logcat$logFileName" /*+ ".txt"*/)

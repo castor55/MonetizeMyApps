@@ -35,7 +35,7 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
     }
 
     override val coroutineContext: CoroutineDispatcher
-        get() = CoroutineContextPool.default
+        get() = CoroutineContextPool.network
 
     private val locationApi by lazy { InjectorUtils.Api.provideLocationApi() }
     @ExperimentalUnsignedTypes
@@ -48,13 +48,9 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
 
     private val sdf by lazy { SimpleDateFormat("HH:mm:ss") }
 
-    private val wakeLock: PowerManager.WakeLock by lazy {
-        (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-            val appName = applicationContext.getApplicationName()
-            val wakeLockTag = "$appName::ProxyWakeLock"
-            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, wakeLockTag)
-        }
-    }
+
+    private val powerManager by lazy { (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager) }
+
 
     @ExperimentalUnsignedTypes
     @ExperimentalStdlibApi
@@ -65,11 +61,13 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
         }
         val batteryInfo = applicationContext.getBatteryInfo()
         appendLogToFile("${sdf.format(System.currentTimeMillis())} doWork: Battery Info = $batteryInfo")
-        if (batteryInfo.isCharging || batteryInfo.level >= Properties.Worker.REQURED_BATTERY_LEVEL) {
-
-            wakeLock.acquire(15 * 60 * 1_000 /*1s*/)
-
-            withContext(CoroutineContextPool.network) {
+        if (batteryInfo.isCharging || batteryInfo.level >= Properties.Worker.REQUIRED_BATTERY_LEVEL) {
+            powerManager.run {
+                val appName = applicationContext.getApplicationName()
+                val wakeLockTag = "$appName::ProxyWakeLock"
+                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, wakeLockTag)
+            }?.let {
+                it.acquire(15 * 60 * 1_000 /*1s*/)
                 try {
                     logd(TAG, "doWork: call startProxy()")
                     appendLogToFile("${sdf.format(System.currentTimeMillis())} doWork: call startProxy()")
@@ -77,12 +75,13 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
                     startProxy()
                 } catch (e: CancellationException) {
                     loge(TAG, e.message)
+                } finally {
+                    appendLogToFile("${sdf.format(System.currentTimeMillis())} Stopping the work ")
+                    appendLogToFile("${sdf.format(System.currentTimeMillis())} Releasing WakeLock ")
+                    logd(TAG, "releasing WakeLock")
+                    it.release()
                 }
             }
-            appendLogToFile("${sdf.format(System.currentTimeMillis())}\tstopping the work ")
-            appendLogToFile("${sdf.format(System.currentTimeMillis())}\treleasing WakeLock ")
-            logd(TAG, "releasing WakeLock")
-            wakeLock.release()
             //restarts this Worker if server was stopped or an error occurred
             restartWork()
         }
@@ -163,7 +162,7 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
 
             } catch (e: Exception) {
                 loge(TAG, "mainTcpClient onError : ${e.message}")
-                coroutineScope { cancel() }
+                coroutineContext.cancel()
             }
         }
     }
