@@ -128,41 +128,43 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
                 )
             )
 
-            mainTcpClient.sendMessageSync(message.toJson())
+            mainTcpClient?.let { mainTcpClient ->
+                mainTcpClient.sendMessageSync(message.toJson())
 
-            try {
-                while (isActive) {
-                    //logd(TAG, "listening loop started")
-                    val response = mainTcpClient.waitForMessageSync()
-                    //logd(TAG, "server response = $response")
-                    if (response.isNullOrBlank()) {
-                        continue
-                        // listener?.onError(this@SocketTcpClient, "response is Empty")
-                    } else {
-                        logd(TAG, "mainTcpClient server response = $response")
-                        val responseObj = response.toObject()
-                        logd(TAG, "mainTcpClient onNewMessage, responseObj : $responseObj")
-                        when (responseObj) {
-                            is ServerMessageEmpty -> {
-                                //logd(TAG, "response message is empty")
+                try {
+                    while (isActive) {
+                        //logd(TAG, "listening loop started")
+                        val response = mainTcpClient.waitForMessageSync()
+                        //logd(TAG, "server response = $response")
+                        if (response.isNullOrBlank()) {
+                            continue
+                            // listener?.onError(this@SocketTcpClient, "response is Empty")
+                        } else {
+                            logd(TAG, "mainTcpClient server response = $response")
+                            val responseObj = response.toObject()
+                            logd(TAG, "mainTcpClient onNewMessage, responseObj : $responseObj")
+                            when (responseObj) {
+                                is ServerMessageEmpty -> {
+                                    //logd(TAG, "response message is empty")
+                                }
+                                is Ping -> {
+                                    logd(TAG, "mainTcpClient response message is Ping")
+                                    mainTcpClient.sendMessageSync(Pong().toJson())
+                                }
+                                is Backconnect -> {
+                                    logd(TAG, "mainTcpClient response message is Backconnect")
+                                    socketServer.startNewBackconnectSession(responseObj)
+                                }
                             }
-                            is Ping -> {
-                                logd(TAG, "mainTcpClient response message is Ping")
-                                mainTcpClient.sendMessageSync(Pong().toJson())
-                            }
-                            is Backconnect -> {
-                                logd(TAG, "mainTcpClient response message is Backconnect")
-                                socketServer.startNewBackconnectSession(responseObj)
-                            }
+                            logd(TAG, "It's ${sdf.format(System.currentTimeMillis())} and I'm still alive")
+                            appendLogToFile("${sdf.format(System.currentTimeMillis())}\t I'm still alive ")
                         }
-                        logd(TAG, "It's ${sdf.format(System.currentTimeMillis())} and I'm still alive")
-                        appendLogToFile("${sdf.format(System.currentTimeMillis())}\t I'm still alive ")
                     }
-                }
 
-            } catch (e: Exception) {
-                loge(TAG, "mainTcpClient onError : ${e.message}")
-                coroutineContext.cancel()
+                } catch (e: Exception) {
+                    loge(TAG, "mainTcpClient onError : ${e.message}")
+                    coroutineContext.cancel()
+                }
             }
         }
     }
@@ -171,7 +173,7 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
     @ExperimentalStdlibApi
     private fun stopAllConnections() {
         logd(TAG, "Stopping mainTcpClient")
-        mainTcpClient.stop()
+        mainTcpClient?.stop()
         logd(TAG, "Stopping socketServer")
         socketServer.stopServer()
         if (coroutineContext.isActive) {

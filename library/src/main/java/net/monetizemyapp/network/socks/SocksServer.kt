@@ -31,53 +31,54 @@ class SocksServer : CoroutineScope {
 
     fun startNewBackconnectSession(backconnect: Backconnect) {
         launch {
-            val newServerConnectionTcpClient = InjectorUtils.TcpClient.provideServerTcpClient()
-            serverConnections.add(newServerConnectionTcpClient)
+            InjectorUtils.TcpClient.provideServerTcpClient()?.let { newServerConnectionTcpClient ->
+                serverConnections.add(newServerConnectionTcpClient)
 
-            val message = Connect(ConnectBody(backconnect.body.token))
-            newServerConnectionTcpClient.sendMessageSync(message.toJson())
+                val message = Connect(ConnectBody(backconnect.body.token))
+                newServerConnectionTcpClient.sendMessageSync(message.toJson())
 
-            logd(TAG, "startNewBackconnectSession: sendMessageSync, message = ${message.toJson()}")
-            val authMethodsSupported = newServerConnectionTcpClient.waitForBytesSync()
-            logd(
-                TAG,
-                "startNewBackconnectSession: waitForBytesSync, firstBytesResponse = ${authMethodsSupported.contentToString()}"
-            )
+                logd(TAG, "startNewBackconnectSession: sendMessageSync, message = ${message.toJson()}")
+                val authMethodsSupported = newServerConnectionTcpClient.waitForBytesSync()
+                logd(
+                    TAG,
+                    "startNewBackconnectSession: waitForBytesSync, firstBytesResponse = ${authMethodsSupported.contentToString()}"
+                )
 
-            val chosenAuthMethod = byteArrayOf(5, 0)
-            newServerConnectionTcpClient.sendBytesSync(chosenAuthMethod)
-            logd(
-                TAG,
-                "startNewBackconnectSession: send chosenAuthMethod = ${chosenAuthMethod.contentToString()}"
-            )
+                val chosenAuthMethod = byteArrayOf(5, 0)
+                newServerConnectionTcpClient.sendBytesSync(chosenAuthMethod)
+                logd(
+                    TAG,
+                    "startNewBackconnectSession: send chosenAuthMethod = ${chosenAuthMethod.contentToString()}"
+                )
 
-            val connectionRequestBytes = newServerConnectionTcpClient.waitForBytesSync()
-            logd(
-                TAG,
-                "startNewBackconnectSession: connectionRequestBytes = ${connectionRequestBytes.contentToString()}"
-            )
+                val connectionRequestBytes = newServerConnectionTcpClient.waitForBytesSync()
+                logd(
+                    TAG,
+                    "startNewBackconnectSession: connectionRequestBytes = ${connectionRequestBytes.contentToString()}"
+                )
 
 
-            val (ip, port) = parseSocksConnectionRequest(connectionRequestBytes)
+                val (ip, port) = parseSocksConnectionRequest(connectionRequestBytes)
 
-            logd(TAG, "startNewBackconnectSession: try to connect to backconnect ip = $ip, port = $port\n")
+                logd(TAG, "startNewBackconnectSession: try to connect to backconnect ip = $ip, port = $port\n")
 
-            val backConnectSocket = InjectorUtils.Sockets.provideSimpleSocketConnection(ip, port)
-            val newBackConnectTcpClient = SocketTcpClient(backConnectSocket)
-            serverConnections.add(newBackConnectTcpClient)
+                val backConnectSocket = InjectorUtils.Sockets.provideSimpleSocketConnection(ip, port)
+                val newBackConnectTcpClient = SocketTcpClient(backConnectSocket)
+                serverConnections.add(newBackConnectTcpClient)
 
-            // Return bytes, or error, to the client
-            val status = if (backConnectSocket.isBound && !backConnectSocket.isClosed) 0 else 5
+                // Return bytes, or error, to the client
+                val status = if (backConnectSocket.isBound && !backConnectSocket.isClosed) 0 else 5
 
-            val socksServerResponse =
-                Socks5Message(5.toByte(), status.toByte(), 0, 0, 0, byteArrayOf(0), byteArrayOf(0))
-            logd(
-                TAG,
-                "startNewBackconnectSession: sendBytesSync, statusResponseToServer = ${socksServerResponse.bytes.contentToString()}"
-            )
+                val socksServerResponse =
+                    Socks5Message(5.toByte(), status.toByte(), 0, 0, 0, byteArrayOf(0), byteArrayOf(0))
+                logd(
+                    TAG,
+                    "startNewBackconnectSession: sendBytesSync, statusResponseToServer = ${socksServerResponse.bytes.contentToString()}"
+                )
 
-            newServerConnectionTcpClient.sendBytesSync(socksServerResponse.bytes)
-            exchangeBytes(newServerConnectionTcpClient, newBackConnectTcpClient)
+                newServerConnectionTcpClient.sendBytesSync(socksServerResponse.bytes)
+                exchangeBytes(newServerConnectionTcpClient, newBackConnectTcpClient)
+            }
         }
     }
 
