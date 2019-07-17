@@ -94,8 +94,9 @@ object MonetizeMyApp {
     /**
      * Launches monetization settings Activity.
      **/
+    @JvmOverloads
     fun openSettings(
-        context: Context, vararg enabledOptions: MonetizationOptions? = arrayOf(
+        context: Context, enabledOptions: Array<MonetizationOptions> = arrayOf(
             MonetizationOptions.Subscription
         )
     ) {
