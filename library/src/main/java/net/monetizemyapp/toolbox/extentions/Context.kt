@@ -13,7 +13,7 @@ fun Context?.getAppInfo() = this?.let {
         ?.getApplicationInfo(applicationContext.packageName, PackageManager.GET_META_DATA)
 }
 
-data class BatteryInfo(val level: Float, val isCharging: Boolean){
+data class BatteryInfo(val level: Float, val isCharging: Boolean) {
     override fun toString(): String {
         return "\n\t------\n\tBattery Level = $level\n\tIs Charging =$isCharging"
     }
@@ -38,10 +38,10 @@ fun Context?.getBatteryInfo(): BatteryInfo =
         BatteryInfo(batteryLevel, isCharging)
     } ?: BatteryInfo(0f, false)
 
-fun Context?.getApplicationName(): String? = this?.let {
-    it.applicationInfo.let { appInfo ->
+fun Context?.getApplicationName(): String? = this?.let { context ->
+    context.applicationInfo.let { appInfo ->
         val stringId = appInfo.labelRes
-        stringId.takeIf { it == 0 }?.let { appInfo.nonLocalizedLabel.toString() } ?: it.getString(stringId)
+        stringId.takeIf { it == 0 }?.let { appInfo.nonLocalizedLabel.toString() } ?: context.getString(stringId)
     }
 }
 

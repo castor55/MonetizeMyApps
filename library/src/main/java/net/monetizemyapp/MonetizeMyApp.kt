@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
-import android.widget.Toast
 import androidx.work.*
 import net.monetizemyapp.android.MonetizationSettingsActivity
 import net.monetizemyapp.android.PromptActivity

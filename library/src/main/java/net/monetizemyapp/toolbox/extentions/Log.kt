@@ -1,5 +1,6 @@
 package net.monetizemyapp.toolbox.extentions
 
+import android.content.Context
 import android.os.Environment
 import android.util.Log
 import com.proxyrack.BuildConfig
@@ -19,9 +20,9 @@ fun Any.loge(tag: String = this.javaClass.canonicalName ?: this.javaClass.name, 
     Log.e(tag, text ?: "")
 }
 
-fun appendLogToFile(text: String) {
+fun appendLogToFile(context: Context, text: String) {
     if (!BuildConfig.DEBUG) return
-    val appDirectory = File(Environment.getExternalStorageDirectory().path + "/MonetizeMyApp")
+    val appDirectory = File(context.getExternalFilesDir(null)?.path + "/MonetizeMyApp")
     val logFileName = "Proxy_logs"
     val logFile = File(appDirectory, "/logcat$logFileName" /*+ ".txt"*/)
 

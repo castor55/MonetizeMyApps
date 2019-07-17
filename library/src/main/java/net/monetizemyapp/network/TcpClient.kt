@@ -13,7 +13,8 @@ interface TcpClient {
 
     fun setKeepAlive(keepAlive: Boolean)
 
-    interface OnSocketResponseListener {
+    //to implement callbacks for TcpClient events
+    /*interface OnSocketResponseListener {
         fun onNewMessage(client: TcpClient, message: String)
         fun onNewBytes(client: TcpClient, bytes: ByteArray)
         fun onError(client: TcpClient, error: String)
@@ -23,5 +24,5 @@ interface TcpClient {
         override fun onNewMessage(client: TcpClient, message: String) {}
         override fun onNewBytes(client: TcpClient, bytes: ByteArray) {}
         override fun onError(client: TcpClient, error: String) {}
-    }
+    }*/
 }

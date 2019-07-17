@@ -126,8 +126,8 @@ class SocksServer : CoroutineScope {
         }
 
         if (canceled) {
-            listOf(serverConnectionClient, backConnectClient).forEach {
-                serverConnections.remove(it.apply { stop() })
+            listOf(serverConnectionClient, backConnectClient).forEach { client ->
+                serverConnections.remove(client.also { it.stop() })
             }
         }
     }

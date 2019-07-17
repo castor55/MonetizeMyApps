@@ -18,6 +18,7 @@
     <string name="subscription">Subscription</string>
     <string name="hint_subscription">use the app for an annual subscription</string>
     <string name="settings">Settings</string>
-    <string name="dissable_battery_optimization">Please disable battery optimization for this app in phone settings
+    <string name="dissable_battery_optimization">Please disable the battery optimization for this application in the
+        phone settings
     </string>
 </resources>
