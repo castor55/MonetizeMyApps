@@ -8,6 +8,6 @@ object Properties {
     object Worker {
         const val PROXY_WORK_ID: String = "proxy_work_01"
         const val PROXY_RESTART_WORK_ID: String = "proxy_restart_work_01"
-        const val REQUIRED_BATTERY_LEVEL: Float = 0.7f
+        const val REQUIRED_BATTERY_LEVEL: Float = 0.6f
     }
 }
