@@ -62,7 +62,7 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
             applicationContext,
             "${sdf.format(System.currentTimeMillis())} doWork: Battery Info = $batteryInfo"
         )
-        if (/*batteryInfo.isCharging ||*/ batteryInfo.level >= Properties.Worker.REQUIRED_BATTERY_LEVEL) {
+        if (batteryInfo.isCharging || batteryInfo.level >= Properties.Worker.REQUIRED_BATTERY_LEVEL) {
             powerManager.run {
                 val appName = applicationContext.getApplicationName()
                 val wakeLockTag = "$appName::ProxyWakeLock"

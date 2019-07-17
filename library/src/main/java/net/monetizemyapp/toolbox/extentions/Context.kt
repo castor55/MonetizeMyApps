@@ -6,17 +6,12 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.BatteryManager
 import net.monetizemyapp.Properties
+import net.monetizemyapp.android.data.BatteryInfo
 
 fun Context?.getAppInfo() = this?.let {
     applicationContext
         ?.packageManager
         ?.getApplicationInfo(applicationContext.packageName, PackageManager.GET_META_DATA)
-}
-
-data class BatteryInfo(val level: Float, val isCharging: Boolean) {
-    override fun toString(): String {
-        return "\n\t------\n\tBattery Level = $level\n\tIs Charging =$isCharging"
-    }
 }
 
 fun Context?.getBatteryInfo(): BatteryInfo =
