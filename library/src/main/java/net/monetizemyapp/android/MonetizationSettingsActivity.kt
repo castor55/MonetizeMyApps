@@ -2,13 +2,23 @@ package net.monetizemyapp.android
 
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.airbnb.paris.extensions.style
 import com.proxyrack.R
 import kotlinx.android.synthetic.main.activity_settings_monetization.*
+import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.network.*
 
 class MonetizationSettingsActivity : AppCompatActivity() {
+
+    companion object {
+        internal const val EXTRA_ENABLED_MONETIZATION_OPTIONS = "enabled_monetization_options"
+    }
+
+    private val enabledMonetizationOptions by lazy {
+        intent.extras?.get(EXTRA_ENABLED_MONETIZATION_OPTIONS) as? Array<MonetizeMyApp.MonetizationOptions>
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,9 +29,18 @@ class MonetizationSettingsActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setHomeButtonEnabled(true)
 
+        setupButtons()
+    }
+
+    private fun setupButtons() {
+        enabledMonetizationOptions?.let { options ->
+            if (options.find { it is MonetizeMyApp.MonetizationOptions.Subscription } == null) {
+                btnSubscription.visibility = View.GONE
+            }
+        }
+
         resetButtonStyles()
         setSelectedButtonStyle()
-
         setClickListeners()
     }
 
