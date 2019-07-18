@@ -62,9 +62,9 @@ object MonetizeMyApp {
                     }
                     removeActivityListener(context, this)
                     return
-                } ?: activity?.intent?.action?.equals(Intent.ACTION_MAIN)?.takeIf { it }?.let {
+                } ?: startPromptActivity(context, 500L)/*activity?.intent?.action?.equals(Intent.ACTION_MAIN)?.takeIf { it }?.let {
                     startPromptActivity(context, 500L)
-                }
+                }*/
             }
         }
 
@@ -85,6 +85,7 @@ object MonetizeMyApp {
     private fun startPromptActivity(context: Context, delay: Long) {
         Handler().postDelayed({
             val intent = Intent(context, PromptActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             intent.putExtra(EXTRA_PACKAGE_NAME, context.packageName)
             context.startActivity(intent)
