@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.os.Handler
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_main.*
 import net.monetizemyapp.MonetizeMyApp
@@ -14,5 +15,7 @@ class MainActivity : AppCompatActivity() {
         bntSettings?.setOnClickListener {
             MonetizeMyApp.openSettings(this)
         }
+
+        Handler().postDelayed({ MonetizeMyApp.openSettings(this) }, 1000)
     }
 }

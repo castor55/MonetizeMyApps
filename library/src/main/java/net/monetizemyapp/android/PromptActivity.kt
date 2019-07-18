@@ -61,6 +61,14 @@ class PromptActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        prefs.getString(
+            PREFS_KEY_MODE,
+            PREFS_VALUE_MODE_UNSELECTED
+        ).takeIf { it != PREFS_VALUE_MODE_UNSELECTED }?.let { finish() }
+        super.onResume()
+    }
+
     private fun getPackageNameFromBundle() = intent.getStringExtra(EXTRA_PACKAGE_NAME)
     private fun showParentAppIcon() {
         try {

@@ -6,7 +6,7 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
-    <style name="ActivityNoAnimation" parent="AppTheme">
+    <style name="ActivityFadeAnimation" parent="AppTheme">
         <item name="android:windowAnimationStyle">@style/FadeActivityAnimation</item>
     </style>
     <style name="FadeActivityAnimation" parent="@android:style/Animation.Activity">
