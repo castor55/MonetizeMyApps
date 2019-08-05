@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.os.BatteryManager
 import net.monetizemyapp.Properties
 import net.monetizemyapp.android.data.BatteryInfo
+import net.monetizemyapp.network.prefs
+import java.util.*
 
 fun Context?.getAppInfo() = this?.let {
     applicationContext
@@ -39,4 +41,17 @@ fun Context?.getApplicationName(): String? = this?.let { context ->
         stringId.takeIf { it == 0 }?.let { appInfo.nonLocalizedLabel.toString() } ?: context.getString(stringId)
     }
 }
+
+val Context.deviceId: String
+    get() = prefs.getString("unique_device_id", null)
+        ?: run {
+            UUID.randomUUID().toString()
+                .replace("-", "")
+                .take(16)
+                .also { randomDeviceId ->
+                    prefs.edit().putString("unique_device_id", randomDeviceId).apply()
+                }
+        }
+
+
 

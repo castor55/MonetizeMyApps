@@ -7,20 +7,6 @@ import android.os.Build
 import android.preference.PreferenceManager
 import com.google.gson.Gson
 import net.monetizemyapp.network.model.step1.SystemInfo
-import java.util.*
-
-
-var uniqueId: String? = null
-
-val deviceId: String
-    get() {
-        if (uniqueId == null) {
-            uniqueId = UUID.randomUUID().toString()
-                .replace("-", "")
-                .take(16)
-        }
-        return "$uniqueId"
-    }
 
 @SuppressLint("HardwareIds")
 fun getSystemInfo(): SystemInfo {
@@ -29,7 +15,6 @@ fun getSystemInfo(): SystemInfo {
         architecture = System.getProperty("os.arch")!!
     )
 }
-
 
 inline fun <reified T> String.fromJson(): T {
     return Gson().fromJson<T>(this, T::class.java)

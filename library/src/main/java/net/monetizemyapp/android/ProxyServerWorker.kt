@@ -8,7 +8,6 @@ import kotlinx.coroutines.*
 import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.Properties
 import net.monetizemyapp.di.InjectorUtils
-import net.monetizemyapp.network.deviceId
 import net.monetizemyapp.network.getSystemInfo
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.response.IpApiResponse
@@ -104,11 +103,9 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
 
         logd(TAG, "StartProxy")
 
-        val clientKey = applicationContext.getAppInfo()?.metaData?.getString("monetize_app_key")
-
-        if (clientKey.isNullOrBlank()) {
-            throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
-        }
+        val clientKey =
+            applicationContext.getAppInfo()?.metaData?.getString("monetize_app_key").takeIf { !it.isNullOrBlank() }
+                ?: throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
 
         val location: Response<IpApiResponse>? = try {
             locationApi.getLocation()
@@ -125,7 +122,7 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
                 HelloBody(
                     clientKey,
                     it.query,
-                    deviceId,
+                    applicationContext.deviceId,
                     it.city,
                     it.countryCode,
                     getSystemInfo()
