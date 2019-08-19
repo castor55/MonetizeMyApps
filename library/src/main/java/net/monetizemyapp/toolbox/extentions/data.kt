@@ -7,7 +7,6 @@ import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.base.ServerMessageType
 import net.monetizemyapp.network.model.step0.Ping
 import net.monetizemyapp.network.model.step2.Backconnect
-import kotlin.experimental.and
 
 fun Any?.toJson() = Gson().toJson(this) + endOfString()
 

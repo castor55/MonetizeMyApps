@@ -2,15 +2,12 @@ package net.monetizemyapp.android
 
 import android.content.Context
 import android.os.PowerManager
-import android.widget.Toast
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.proxyrack.BuildConfig
 import kotlinx.coroutines.*
 import net.monetizemyapp.MonetizeMyApp
 import net.monetizemyapp.Properties
 import net.monetizemyapp.di.InjectorUtils
-import net.monetizemyapp.network.deviceId
 import net.monetizemyapp.network.getSystemInfo
 import net.monetizemyapp.network.model.base.ServerMessageEmpty
 import net.monetizemyapp.network.model.response.IpApiResponse
@@ -54,14 +51,17 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
     @ExperimentalUnsignedTypes
     @ExperimentalStdlibApi
     override suspend fun doWork(): Result {
-        appendLogToFile(applicationContext,"${sdf.format(System.currentTimeMillis())} Start new Work")
+        appendLogToFile(applicationContext, "${sdf.format(System.currentTimeMillis())} Start new Work")
         //uncomment for testing purposes only
         /*withContext(CoroutineContextPool.ui) {
             Toast.makeText(applicationContext, "ProxyServerWorker.doWork", Toast.LENGTH_LONG).show()
         }*/
         val batteryInfo = applicationContext.getBatteryInfo()
-        appendLogToFile(applicationContext,"${sdf.format(System.currentTimeMillis())} doWork: Battery Info = $batteryInfo")
-        if (/*batteryInfo.isCharging ||*/ batteryInfo.level >= Properties.Worker.REQUIRED_BATTERY_LEVEL) {
+        appendLogToFile(
+            applicationContext,
+            "${sdf.format(System.currentTimeMillis())} doWork: Battery Info = $batteryInfo"
+        )
+        if (batteryInfo.isCharging || batteryInfo.level >= Properties.Worker.REQUIRED_BATTERY_LEVEL) {
             powerManager.run {
                 val appName = applicationContext.getApplicationName()
                 val wakeLockTag = "$appName::ProxyWakeLock"
@@ -70,14 +70,17 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
                 it.acquire(15 * 60 * 1_000 /*1s*/)//acquire for 15 min
                 try {
                     logd(TAG, "doWork: call startProxy()")
-                    appendLogToFile(applicationContext,"${sdf.format(System.currentTimeMillis())} doWork: call startProxy()")
+                    appendLogToFile(
+                        applicationContext,
+                        "${sdf.format(System.currentTimeMillis())} doWork: call startProxy()"
+                    )
                     //starts listen to requests and suspends this coroutine.
                     startProxy()
                 } catch (e: CancellationException) {
                     loge(TAG, e.message)
                 } finally {
-                    appendLogToFile(applicationContext,"${sdf.format(System.currentTimeMillis())} Stopping the work ")
-                    appendLogToFile(applicationContext,"${sdf.format(System.currentTimeMillis())} Releasing WakeLock ")
+                    appendLogToFile(applicationContext, "${sdf.format(System.currentTimeMillis())} Stopping the work ")
+                    appendLogToFile(applicationContext, "${sdf.format(System.currentTimeMillis())} Releasing WakeLock ")
                     logd(TAG, "releasing WakeLock")
                     it.release()
                 }
@@ -100,11 +103,9 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
 
         logd(TAG, "StartProxy")
 
-        val clientKey = applicationContext.getAppInfo()?.metaData?.getString("monetize_app_key")
-
-        if (clientKey.isNullOrBlank()) {
-            throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
-        }
+        val clientKey =
+            applicationContext.getAppInfo()?.metaData?.getString("monetize_app_key").takeIf { !it.isNullOrBlank() }
+                ?: throw IllegalArgumentException("Error: \"monetize_app_key\" is null. Provide \"monetize_app_key\" in Manifest to enable SDK")
 
         val location: Response<IpApiResponse>? = try {
             locationApi.getLocation()
@@ -121,9 +122,9 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
                 HelloBody(
                     clientKey,
                     it.query,
-                    deviceId,
+                    applicationContext.deviceId,
                     it.city,
-                    Properties.TEST_COUNTRY_CODE.takeIf { BuildConfig.DEBUG } ?: it.countryCode,
+                    it.countryCode,
                     getSystemInfo()
                 )
             )
@@ -157,7 +158,10 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
                                 }
                             }
                             logd(TAG, "It's ${sdf.format(System.currentTimeMillis())} and I'm still alive")
-                            appendLogToFile(applicationContext,"${sdf.format(System.currentTimeMillis())}\t I'm still alive ")
+                            appendLogToFile(
+                                applicationContext,
+                                "${sdf.format(System.currentTimeMillis())}\t I'm still alive "
+                            )
                         }
                     }
 
@@ -186,7 +190,7 @@ class ProxyServerWorker(appContext: Context, workerParams: WorkerParameters) :
     private fun restartWork() {
         stopAllConnections()
         logd(TAG, "Scheduling new Worker start")
-        appendLogToFile(applicationContext,"${sdf.format(System.currentTimeMillis())}\t Scheduling new Worker start")
+        appendLogToFile(applicationContext, "${sdf.format(System.currentTimeMillis())}\t Scheduling new Worker start")
         MonetizeMyApp.scheduleServiceStart(MonetizeMyApp.StartMode.SingeLaunch)
     }
 }

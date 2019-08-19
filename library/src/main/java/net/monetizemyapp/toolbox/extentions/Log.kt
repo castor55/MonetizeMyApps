@@ -1,7 +1,6 @@
 package net.monetizemyapp.toolbox.extentions
 
 import android.content.Context
-import android.os.Environment
 import android.util.Log
 import com.proxyrack.BuildConfig
 import java.io.BufferedWriter

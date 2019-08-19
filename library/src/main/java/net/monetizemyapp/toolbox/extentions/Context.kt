@@ -6,17 +6,14 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.BatteryManager
 import net.monetizemyapp.Properties
+import net.monetizemyapp.android.data.BatteryInfo
+import net.monetizemyapp.network.prefs
+import java.util.*
 
 fun Context?.getAppInfo() = this?.let {
     applicationContext
         ?.packageManager
         ?.getApplicationInfo(applicationContext.packageName, PackageManager.GET_META_DATA)
-}
-
-data class BatteryInfo(val level: Float, val isCharging: Boolean) {
-    override fun toString(): String {
-        return "\n\t------\n\tBattery Level = $level\n\tIs Charging =$isCharging"
-    }
 }
 
 fun Context?.getBatteryInfo(): BatteryInfo =
@@ -44,4 +41,17 @@ fun Context?.getApplicationName(): String? = this?.let { context ->
         stringId.takeIf { it == 0 }?.let { appInfo.nonLocalizedLabel.toString() } ?: context.getString(stringId)
     }
 }
+
+val Context.deviceId: String
+    get() = prefs.getString("unique_device_id", null)
+        ?: run {
+            UUID.randomUUID().toString()
+                .replace("-", "")
+                .take(16)
+                .also { randomDeviceId ->
+                    prefs.edit().putString("unique_device_id", randomDeviceId).apply()
+                }
+        }
+
+
 

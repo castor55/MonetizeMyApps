@@ -12,12 +12,35 @@ import net.monetizemyapp.android.PromptActivity
 import net.monetizemyapp.android.ProxyServerWorker
 import net.monetizemyapp.network.*
 import net.monetizemyapp.toolbox.extentions.logd
+import java.io.Serializable
+import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
 
 object MonetizeMyApp {
 
+    private var contextRef: WeakReference<Context>? = null
+
+    private val optionsMap by lazy {
+        mapOf(
+            PREFS_VALUE_MODE_UNSELECTED to MonetizationOptions.Unselected,
+            PREFS_VALUE_MODE_PROXY to MonetizationOptions.Free,
+            PREFS_VALUE_MODE_ADS to MonetizationOptions.Ads,
+            PREFS_VALUE_MODE_SUBSCRIPTION to MonetizationOptions.Subscription
+        )
+    }
+
+    val currentOption: MonetizationOptions
+        get() = optionsMap.getOrElse(
+            contextRef?.get()?.prefs?.getString(
+                PREFS_KEY_MODE,
+                PREFS_VALUE_MODE_UNSELECTED
+            ) ?: PREFS_VALUE_MODE_UNSELECTED
+        ) { MonetizeMyApp.MonetizationOptions.Unselected }
+
+
     @JvmStatic
     fun init(context: Context) {
+        contextRef = WeakReference(context)
 
         val callback = object : Application.ActivityLifecycleCallbacks {
             override fun onActivityPaused(activity: Activity?) {}
@@ -39,9 +62,14 @@ object MonetizeMyApp {
                     }
                     removeActivityListener(context, this)
                     return
-                } ?: activity?.intent?.action?.equals(Intent.ACTION_MAIN)?.takeIf { it }?.let {
+                } ?: activity?.takeIf { it.javaClass.name != PromptActivity::class.java.name }?.let {
+                    startPromptActivity(
+                        context,
+                        500L
+                    )
+                }/*activity?.intent?.action?.equals(Intent.ACTION_MAIN)?.takeIf { it }?.let {
                     startPromptActivity(context, 500L)
-                }
+                }*/
             }
         }
 
@@ -62,8 +90,8 @@ object MonetizeMyApp {
     private fun startPromptActivity(context: Context, delay: Long) {
         Handler().postDelayed({
             val intent = Intent(context, PromptActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             intent.putExtra(EXTRA_PACKAGE_NAME, context.packageName)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         }, delay)
     }
@@ -71,21 +99,25 @@ object MonetizeMyApp {
     /**
      * Launches monetization settings Activity.
      **/
-    fun openSettings(context: Context) {
+    @JvmOverloads
+    fun openSettings(
+        context: Context, enabledOptions: Array<MonetizationOptions> = arrayOf(
+            MonetizationOptions.Subscription
+        )
+    ) {
         val intent = Intent(context, MonetizationSettingsActivity::class.java)
+        intent.putExtra(MonetizationSettingsActivity.EXTRA_ENABLED_MONETIZATION_OPTIONS, enabledOptions)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        intent.putExtra(EXTRA_PACKAGE_NAME, context.packageName)
         context.startActivity(intent)
     }
 
-    fun scheduleServiceStart(startMode: StartMode) {
+    internal fun scheduleServiceStart(startMode: StartMode) {
         logd(Properties.APP_TAG, "schedule Proxy Worker Start")
 
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .setRequiredNetworkType(NetworkType.UNMETERED)
             .build()
-
 
         if (startMode is StartMode.SingeLaunch) {
             val proxyStartWorkRequest = OneTimeWorkRequestBuilder<ProxyServerWorker>()
@@ -111,8 +143,16 @@ object MonetizeMyApp {
         }
     }
 
-    sealed class StartMode {
+    internal sealed class StartMode {
         object SingeLaunch : StartMode()
         object PeriodicRestart : StartMode()
     }
+
+    sealed class MonetizationOptions : Serializable {
+        object Subscription : MonetizationOptions()
+        object Ads : MonetizationOptions()
+        object Free : MonetizationOptions()
+        object Unselected : MonetizationOptions()
+    }
+
 }
