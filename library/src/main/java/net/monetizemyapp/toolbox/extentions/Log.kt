@@ -10,7 +10,7 @@ import java.io.IOException
 
 
 fun Any.logd(tag: String = this.javaClass.canonicalName ?: this.javaClass.name, text: String?) {
-    if (!BuildConfig.DEBUG) return
+    //if (!BuildConfig.DEBUG) return
     Log.d(tag, text ?: "")
 }
 
